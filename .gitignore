@@ -1,3 +1,7 @@
 .idea/
 __pycache__
 .DS_Store
+gym_pomdp/envs/pocman.py
+build
+dist
+gym_pomdp.egg-info

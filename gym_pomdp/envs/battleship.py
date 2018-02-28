@@ -2,7 +2,7 @@ from enum import Enum
 import numpy as np
 from gym import Env
 from gym.spaces import Discrete
-from gym_pomdp.envs.coord import Grid, Coord
+from gym_pomdp.envs.coord import Grid, Coord, Tile
 from gym_pomdp.envs.gui import ShipGui
 
 
@@ -40,8 +40,9 @@ class ShipState(object):
         self.total_remaining = 0
 
 
-class Cell(object):
-    def __init__(self):
+class Cell(Tile):
+    def __init__(self, coord):
+        super().__init__(coord=coord)
         self.occupied = False
         self.visited = False
         self.diagonal = False
@@ -58,6 +59,7 @@ class BattleShipEnv(Env):
     def __init__(self, board_size=(5, 5), max_len=3):
         self.grid = BattleGrid(board_size)
         self.action_space = Discrete(self.grid.n_tiles)
+        self.observation_space = Discrete(len(Obs))
         self.num_obs = 2
         self.rw_range = self.action_space.n / 4.
         self.discount = 1.
@@ -70,8 +72,8 @@ class BattleShipEnv(Env):
         assert self.action_space.contains(action)
         self.last_action = action
         self.t += 1
-        cell = self.grid.board[action]
         action_pos = self.grid.get_coord(action)
+        cell = self.grid.get_value(action_pos)
         reward = 0
         if cell.visited:
             reward -= 10
@@ -99,7 +101,7 @@ class BattleShipEnv(Env):
         self.done = False
         self.tot_rw = 0
         self.t = 0
-        self.last_action = 0
+        self.last_action = -1
         self._init_state()
         return Obs.NULL.value
 
@@ -114,18 +116,17 @@ class BattleShipEnv(Env):
                         pos += Compass.get_coord(ship.direction)
                         obj_pos.append(self.grid.get_index(pos))
                 self.gui = ShipGui(board_size=self.grid.get_size(), obj_pos=obj_pos)
-
-            msg = "A: " + str(self.grid.get_coord(self.last_action).to_list()) + "T: " + str(self.t) + "Rw :" + str(
-                self.tot_rw)
-            self.gui.render(state=self.last_action, msg=msg)
+            if self.t >0:
+                msg = "A: " + str(self.grid.get_coord(self.last_action).to_list()) + "T: " + str(self.t) + "Rw :" + str(
+                    self.tot_rw)
+                self.gui.render(state=self.last_action, msg=msg)
 
     def _close(self):
         pass
 
     def _init_state(self):
         self.bsstate = ShipState()
-        for tile in range(self.grid.n_tiles):
-            self.grid.board.append(Cell())
+        self.grid.build_board(Tile=Cell)
 
         for length in reversed(range(2, self.max_len)):
             # num_ships = 1

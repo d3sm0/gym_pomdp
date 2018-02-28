@@ -1,66 +1,63 @@
 import os
 import pygame
-from queue import deque
+from itertools import zip_longest
+from gym_pomdp.envs.coord import Coord, Tile
 
 PATH = os.path.split(__file__)[0]
 
 
 # TODO Check abs path
-class Tile(object):
-    borderColor = pygame.Color("grey")
-    borderWidth = 2
+# TODO Rotate grid
 
-    def __init__(self, x, y, surface, tile_size=(100, 100)):
-        self.origin = (x, y)
-        self.coord = (x // tile_size[0], y // tile_size[1])
+class GuiTile(Tile):
+    _borderWidth = 2
+    _borderColor = pygame.Color("grey")
+
+    def __init__(self, coord, surface, tile_size=100):
+        self.origin = (coord.x * tile_size, coord.y * tile_size)
         self.surface = surface
-        self.tile_size = tile_size
+        self.tile_size = tuple([tile_size] * 2)
+        super().__init__(coord)
 
     def draw(self, img=None, color=pygame.Color("white")):
         rect = pygame.Rect(self.origin, self.tile_size)
-        pygame.draw.rect(self.surface, color, rect, 0)
+        pygame.draw.rect(self.surface, color, rect, 0)  # draw tile
         if img is not None:
             self.surface.blit(img, self.origin)
-        pygame.draw.rect(self.surface, Tile.borderColor, rect, Tile.borderWidth)
+        pygame.draw.rect(self.surface, GuiTile._borderColor, rect, GuiTile._borderWidth)  # draw border
 
 
 class GridGui(object):
-    tile_size = (100, 100)
     _assets = {}
 
-    def __init__(self, board_size=(2, 2)):
-        self.board_size = board_size
+    def __init__(self, x_size, y_size, tile_size):
+        self.x_size = x_size
+        self.y_size = y_size
+        self.n_tiles = x_size * y_size
+        self.tile_size = tile_size
         self.assets = {}
         for k, v in self._assets.items():
-            self.assets[k] = pygame.transform.scale(pygame.image.load(v), self.tile_size)
+            self.assets[k] = pygame.transform.scale(pygame.image.load(v), [tile_size] * 2)
 
-        self.w = self.tile_size[0] * board_size[1]
-        self.h = self.tile_size[0] * board_size[0] + 50  # size of the taskbar
+        self.w = self.tile_size * self.x_size
+        self.h = (self.tile_size * self.y_size) + 50  # size of the taskbar
 
         pygame.init()
         self.surface = pygame.display.set_mode((self.w, self.h))
         self.surface.fill(pygame.Color("white"))
         self.action_font = pygame.font.SysFont("monospace", 18)
-        self.create_tiles()
+        self.build_board()
 
-    def create_tiles(self):
+    def build_board(self):
         self.board = []
+        for idx in range(self.n_tiles):
+            tile = GuiTile(self.get_coord(idx), surface=self.surface, tile_size=self.tile_size)
+            tile.draw(img=None)
+            self.board.append(tile)
 
-        for r in range(self.board_size[0]):
-            for c in range(self.board_size[1]):
-                x = c * self.tile_size[0]
-                y = r * self.tile_size[1]
-                tile = Tile(x, y, self.surface, tile_size=self.tile_size)
-                tile.draw(img=None)
-                self.board.append(tile)
-                # pygame.display.update()
-                # self._dispatch()
-
-        # for idx in range(self.board_size[0] * self.board_size[1]):
-        #     x = (idx % self.w) * self.tile_size[0]
-        #     y = (idx // self.h) * self.tile_size[1]
-        #     tile = Tile(x, y, self.surface, tile_size=self.tile_size)
-        #     self.board.append(tile)
+    def get_coord(self, idx):
+        assert idx >= 0 and idx < self.n_tiles
+        return Coord(idx % self.x_size, idx // self.x_size)
 
     def draw(self, update_board=False):
         raise NotImplementedError()
@@ -73,7 +70,7 @@ class GridGui(object):
         txt = self.action_font.render(msg, 2, pygame.Color("black"))
         rect = pygame.Rect((0, self.h - 50 + 5), (self.w, 40))  # 205 for tiger
         pygame.draw.rect(self.surface, pygame.Color("white"), rect, 0)
-        self.surface.blit(txt, (self.tile_size[0] / 2, self.h - 50 + 10))  # 210
+        self.surface.blit(txt, (self.tile_size // 2, self.h - 50 + 10))  # 210
 
     @staticmethod
     def _dispatch():
@@ -83,13 +80,13 @@ class GridGui(object):
 
 
 class ShipGui(GridGui):
-    tile_size = (50, 50)
+    _tile_size = 50
 
-    def __init__(self, board_size=(5, 5), start_pos=0, obj_pos=()):
-        super().__init__(board_size)
+    def __init__(self, board_size=(5, 5), obj_pos=()):
+        super().__init__(*board_size, tile_size=self._tile_size)
+
         self.obj_pos = obj_pos
-        self.history = deque(maxlen=1)
-        self.history.append(start_pos)
+        self.last_shot = -1
         self.draw(update_board=True)
         pygame.display.update()
         GridGui._dispatch()
@@ -97,14 +94,15 @@ class ShipGui(GridGui):
     def draw(self, update_board=False):
         if update_board:
             for pos in self.obj_pos:
-                self.board[pos].draw(color=pygame.Color("blue"))
-
-        last_shot = self.history.pop()
-        if last_shot in self.obj_pos:
-            self.board[last_shot].draw(color=pygame.Color("red"))
+                self.board[pos].draw(color=pygame.Color("black"))
+        else:
+            if self.last_shot in self.obj_pos:
+                self.board[self.last_shot].draw(color=pygame.Color("red"))
+            elif self.last_shot > -1:
+                self.board[self.last_shot].draw(color=pygame.Color("blue"))
 
     def render(self, state, msg):
-        self.history.append(state)
+        self.last_shot = state
         self.draw()
         self.task_bar(msg)
         pygame.display.update()
@@ -112,17 +110,15 @@ class ShipGui(GridGui):
 
 
 class RockGui(GridGui):
-    tile_size = (50, 50)
+    _tile_size = 50
     _assets = dict(
         _ROBOT=os.path.abspath("assets/r2d2.png"),
         _ROCK=os.path.abspath("assets/rock.png")
     )
 
     def __init__(self, board_size=(5, 5), start_pos=0, obj_pos=()):
-        super().__init__(board_size=board_size)
-        self.history = deque(maxlen=2)
-        self.history.append(start_pos)
-        # self.agent_pos = start_coord
+        super().__init__(*board_size, tile_size=self._tile_size)
+        self.history = [start_pos] * 2
         self.obj_pos = obj_pos
         self.draw(update_board=True)
         pygame.display.update()
@@ -130,17 +126,17 @@ class RockGui(GridGui):
 
     def draw(self, update_board=False):
 
-        for idx, pos in enumerate(self.history):
-            if idx < self.history.maxlen - 1:
-                if pos in self.obj_pos:
-                    self.board[pos].draw(img=self.assets["_ROCK"])
-                else:
-                    self.board[pos].draw()
-            else:
-                self.board[pos].draw(img=self.assets["_ROBOT"])
         if update_board:
             for obj in self.obj_pos:
                 self.board[obj].draw(img=self.assets["_ROCK"])
+
+        last_state = self.history.pop(0)
+        if last_state in self.obj_pos:
+            self.board[last_state].draw(img=self.assets["_ROCK"])
+        else:
+            self.board[last_state].draw()
+
+        self.board[self.history[-1]].draw(img=self.assets["_ROBOT"])
 
     def render(self, state, msg=None):
         self.history.append(state)
@@ -151,7 +147,7 @@ class RockGui(GridGui):
 
 
 class TagGui(GridGui):
-    tile_size = (50, 50)
+    _tile_size = 50
     _assets = dict(
         _ROBOT=os.path.abspath("assets/r2d2.png"),
         _STORM=os.path.abspath("assets/soldier.png"),
@@ -163,13 +159,10 @@ class TagGui(GridGui):
     )
 
     def __init__(self, board_size=(10, 5), start_pos=0, obj_pos=()):
-        super().__init__(board_size=board_size)
-        # self.agent_pos = start_coord
-        # self.obj_pos = obj
-        self.history = deque(maxlen=len(obj_pos) * 2 + 2)
-        self.history.append(start_pos)
-        for obj in obj_pos:
-            self.history.append(obj)
+        super().__init__(*board_size, tile_size=self._tile_size)
+        self.obj_pos = obj_pos
+        self.agent_history = [start_pos] * 2
+        self.update_opp(obj_pos)
         self.draw(update_board=True)
         pygame.display.update()
         GridGui._dispatch()
@@ -178,21 +171,24 @@ class TagGui(GridGui):
         if update_board:
             for t in self.board:
                 t.draw()
-        agent_idx = (self.history.maxlen) // 2
-        for idx, pos in enumerate(self.history):
-            if idx == agent_idx and idx > 0:
-                self.board[pos].draw(img=self.assets["_ROBOT"])
-            elif idx > agent_idx:
-                self.board[pos].draw(img=self.assets["_STORM"])
-            else:
-                self.board[pos].draw()
+
+        for opp in self.opp_history:
+            old, new = opp
+            self.board[old].draw()
+            if new is not None:
+                self.board[new].draw(img=self.assets["_STORM"])
+
+        self.opp_history = []
+
+        last_state = self.agent_history.pop(0)
+        self.board[last_state].draw()
+        self.board[self.agent_history[-1]].draw(img=self.assets["_ROBOT"])
 
     def render(self, state, msg=None):
 
-        if len(state) - 1 < (self.history.maxlen - 2) // 2:
-            self.history = deque(self.history, maxlen=self.history.maxlen - 2)
-        for s in state:
-            self.history.append(s)
+        agent_pos, obj_pos = state
+        self.agent_history.append(agent_pos)
+        self.update_opp(obj_pos)
         self.draw()
         if msg is not None:
             self.task_bar(msg)
@@ -200,29 +196,31 @@ class TagGui(GridGui):
         pygame.display.update()
         GridGui._dispatch()
 
+    def update_opp(self, opp_pos):
+        self.opp_history = []
+        for old, new in zip_longest(self.obj_pos, opp_pos):
+            self.opp_history.append((old, new))
+        self.obj_pos = opp_pos
+
 
 class TigerGui(GridGui):
-    tile_size = (200, 200)
+    _tile_size = 200
     _assets = dict(
         _CAT=os.path.join(PATH, "assets/cat.png"),
         _DOOR=os.path.join(PATH, "assets/door.png"),
         _BEER=os.path.join(PATH, "assets/beer.png"))
 
-    def __init__(self, board_size=(1, 2)):
-        super(TigerGui, self).__init__(board_size=board_size)
+    def __init__(self, board_size=(2, 1)):
+        super(TigerGui, self).__init__(*board_size, tile_size=self._tile_size)
 
         self.draw(update_board=True)
         pygame.display.update()
         TigerGui._dispatch()
 
     def draw(self, update_board=False):
-        # self.surface.fill(BLACK)
         if update_board:
             for tile in self.board:
                 tile.draw(img=self.assets["_DOOR"])
-        # for row in self.board:
-        #     for tile in row:
-        #         tile.draw(img=self.assets["_DOOR"])
 
     def render(self, state, msg=None):
 

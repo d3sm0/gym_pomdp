@@ -1,5 +1,5 @@
 import gym
-from gym import spaces
+from gym.spaces import Discrete
 from enum import Enum
 import numpy as np
 from gym_pomdp.envs.gui import TigerGui
@@ -10,57 +10,47 @@ class Obs(Enum):
     RIGHT = 1
     NULL = 2
 
-    @staticmethod
-    def get_random_obs():
-        return np.random.choice(Obs).value
-
-    @staticmethod
-    def get_name(idx):
-        return list(Obs)[idx].name.lower()
-
 
 class State(Enum):
     LEFT = 0
     RIGHT = 1
-
-    @staticmethod
-    def get_random_state():
-        return np.random.choice(State).value
-
-    @staticmethod
-    def get_name(idx):
-        return list(State)[idx].name.lower()
 
 
 class Action(Enum):
     LEFT = 0
     RIGHT = 1
     LISTEN = 2
-
-    @staticmethod
-    def get_random_action():
-        return np.random.choice(Action).value
-
-    @staticmethod
-    def get_name(idx):
-        return list(Action)[idx].name.lower()
-
+def state_to_str(state):
+    if state == 0:
+        return "left"
+    elif state==1:
+        return "right"
+    else:
+        raise NotImplementedError()
+def action_to_str(action):
+    if action == 0:
+        return "left"
+    elif action == 1:
+        return "right"
+    elif action == 2:
+        return "listen"
+    else:
+        raise NotImplementedError()
 
 class TigerEnv(gym.Env):
     metadata = {"render.modes": ["human", "ansi"]}
 
     def __init__(self, seed=0, correct_prob=.85):
         self.correct_prob = correct_prob
-        self.action_space = spaces.Discrete(len(Action))
-        self.observation_space = spaces.Discrete(len(Obs))
-        self.state_space = spaces.Discrete(len(State))
-        self.time = 0
+        self.action_space = Discrete(len(Action))
+        self.state_space = Discrete(len(State))
+        self.observation_space = Discrete(len(Obs))
         self.seed(seed)
 
     def _reset(self):
         self.done = False
-        self.time = 0
-        self.state = self.state_space.sample()
+        self.t = 0
+        self.tiger_state = self.state_space.sample()
         self.last_action = Action.LISTEN.value
         return Obs.NULL.value
 
@@ -73,17 +63,17 @@ class TigerEnv(gym.Env):
 
         assert self.action_space.contains(action)
         assert self.done is not True
-        self.time += 1
+        self.t += 1
         self.last_action = action
 
-        rw = TigerEnv._compute_rw(self.state, action)
-        if TigerEnv._is_terminal(self.state, action):
-            return self.state, rw, True, dict(state=self.state, p_ob=1.)
+        rw = TigerEnv._compute_rw(self.tiger_state, action)
+        if TigerEnv._is_terminal(self.tiger_state, action):
+            return self.tiger_state, rw, True, dict(state=self.tiger_state, p_ob=1.)
 
-        self.state = TigerEnv._sample_state(self.state, action)
-        ob = TigerEnv._sample_ob(action, self.state)
-        p_ob = TigerEnv._compute_prob(action, self.state, ob)
-        return ob, rw, False, dict(state=self.state, p_ob=p_ob)
+        self._sample_state(action)
+        ob = TigerEnv._sample_ob(action, self.tiger_state)
+        p_ob = TigerEnv._compute_prob(action, self.tiger_state, ob)
+        return ob, rw, False, {"state": self.tiger_state, "p_ob": p_ob}
 
     def _render(self, mode='human', close=False):
         if close:
@@ -91,10 +81,10 @@ class TigerEnv(gym.Env):
         if mode == "human":
             if not hasattr(self, "gui"):
                 self.gui = TigerGui()
-            msg = "A: " + Action.get_name(self.last_action) + " S: " + State.get_name(self.state)
-            self.gui.render(state=(self.last_action, self.state), msg=msg)
+            msg = "A: " + action_to_str(self.last_action) + " S: " + state_to_str(self.tiger_state)
+            self.gui.render(state=(self.last_action, self.tiger_state), msg=msg)
         elif mode == "ansi":
-            print("Current step: {}, tiger is in state: {}, action took: {}".format(self.time, self.state,
+            print("Current step: {}, tiger is in state: {}, action took: {}".format(self.t, self.tiger_state,
                                                                                     self.last_action[0]))
         else:
             raise NotImplementedError()
@@ -103,13 +93,14 @@ class TigerEnv(gym.Env):
         self._render(close=True)
 
     def set_state(self, state):
-        self.state = state
+        self.tiger_state = state
 
-    @staticmethod
-    def _sample_state(state, action):
+    def _sample_state(self, action):
         if action == Action.RIGHT.value or action == Action.LEFT.value:
-            state = State.get_random_state()
-        return state
+            self.tiger_state = self.state_space.sample()
+
+    def _get_start_state(self):
+        return self.state_space.sample()
 
     @staticmethod
     def _compute_prob(action, next_state, ob, correct_prob=.85):
@@ -166,7 +157,7 @@ if __name__ == '__main__':
 
     env.render()
     while not done:
-        action = Action.get_random_action()
+        action = env.action_space.sample()
         ob1, r, done, info = env.step(action)
         env.render()
 

@@ -2,28 +2,32 @@ import numpy as np
 from gym import Env
 from gym.spaces import Discrete
 from gym_pomdp.envs.gui import TagGui
-from gym_pomdp.envs.coord import Coord, Moves, Grid
+from gym_pomdp.envs.coord import Coord, Moves, Grid, Tile
 
 
 def action_to_str(action):
     if action == 0:
         return "up"
     elif action == 1:
-        return "left"
-    elif action == 2:
         return "right"
-    elif action == 3:
+    elif action == 2:
         return "down"
+    elif action == 3:
+        return "left"
     elif action == 4:
         return "stay"
     else:
         raise NotImplementedError()
 
+class TagTile(Tile):
+    def __init__(self, coord):
+        super().__init__(coord)
 
 class TagGrid(Grid):
     def __init__(self, board_size, obs_cells=29):
         super().__init__(*board_size)
         self.n_tiles = obs_cells
+        self.build_board(TagTile)
 
     def is_inside(self, coord):
         if coord.y >= 2:
@@ -56,6 +60,7 @@ class TagEnv(Env):
         self.rw_range = (-10 * self.num_opponents, 10 * self.num_opponents)
         self.action_space = Discrete(len(Moves))
         self.grid = TagGrid(board_size, obs_cells=obs_cells)
+        self.observation_space = Discrete(self.grid.n_tiles)
         self.time = 0
 
     def _reset(self):
@@ -63,16 +68,18 @@ class TagEnv(Env):
         self.time = 0
         self.last_action = 4
         self._get_start_state()
-        return self.get_obs(action=0)  # get agent position
+        return self._sample_ob(action=0)  # get agent position
 
     def _seed(self, seed=None):
         np.random.seed(seed)
         return [seed]
 
     def _step(self, action):  # state
+        assert self.action_space.contains(action)  # action are idx of movements
+        assert self.done == False
+
         reward = 0.
         self.time += 1
-        assert self.action_space.contains(action)  # action are idx of movements
         self.last_action = action
         if action == 4:
             tagged = False
@@ -81,7 +88,7 @@ class TagEnv(Env):
                     reward = 10.
                     tagged = True
                     print("tagged")
-                    self.tag_state.num_alive -= 1
+                    # self.tag_state.num_alive -= 1
                     self.tag_state.opponent_pos.pop(opp)
                 elif self.tag_state.opponent_pos[opp].is_valid():
                     self.move_opponent(opp)
@@ -94,8 +101,8 @@ class TagEnv(Env):
             if self.grid.is_inside(next_pos):
                 self.tag_state.agent_pos = next_pos
 
-        ob = self.get_obs(action)
-        p_ob = self._sample_ob(action, self.tag_state)
+        ob = self._sample_ob(action)
+        p_ob = self._compute_prob(action, self.tag_state, ob)
         done = TagEnv._is_terminal(self.tag_state)
         return ob, reward, done, {"state": self.tag_state, "p_ob": p_ob}
 
@@ -104,18 +111,19 @@ class TagEnv(Env):
             return
         if mode == "human":
 
-            agent_idx = self.grid.get_index(self.tag_state.agent_pos)
-            obj_idx = [self.grid.get_index(opp) for opp in self.tag_state.opponent_pos]
+            agent_pos = self.grid.get_index(self.tag_state.agent_pos)
+            obj_pos = [self.grid.get_index(opp) for opp in self.tag_state.opponent_pos]
             if not hasattr(self, "gui"):
-                self.gui = TagGui(board_size=self.grid.get_size(), start_pos=agent_idx, obj_pos=obj_idx)
-            msg = "S: " + str(self.tag_state.num_alive) + " T: " + str(self.time) + " A: " + action_to_str(
+                self.gui = TagGui(board_size=self.grid.get_size(), start_pos=agent_pos, obj_pos=obj_pos)
+            msg = "S: " + str(self.tag_state) + " T: " + str(self.time) + " A: " + action_to_str(
                 self.last_action)
-            self.gui.render(state=[agent_idx] + obj_idx, msg=msg)
+            self.gui.render(state=(agent_pos, obj_pos), msg=msg)
 
     def _get_start_state(self):
-        self.tag_state = TagState(self.grid.sample(), num_alive=self.num_opponents)
+        self.tag_state = TagState(self.grid.sample())
         for opp in range(self.num_opponents):
             self.tag_state.opponent_pos.append(self.grid.sample())
+        return self.tag_state
 
     def set_state(self, state):
         self.tag_state = state
@@ -124,11 +132,11 @@ class TagEnv(Env):
         opp_pos = self.tag_state.opponent_pos[opp]
         actions = self._admissable_actions(self.tag_state.agent_pos, opp_pos)
         if np.random.uniform(0, 1) > self.static_param:
-            next_pos = np.random.choice(actions).value
-            if self.grid.is_inside(opp_pos + next_pos):
-                self.tag_state.opponent_pos[opp] = opp_pos + next_pos
+            move = np.random.choice(actions).value
+            if self.grid.is_inside(opp_pos + move):
+                self.tag_state.opponent_pos[opp] = opp_pos + move
 
-    def get_obs(self, action):
+    def _sample_ob(self, action):
         obs = self.grid.get_index(self.tag_state.agent_pos)  # agent index
         if action > 0:
             for opp_pos in self.tag_state.opponent_pos:
@@ -138,7 +146,7 @@ class TagEnv(Env):
         return obs
 
     @staticmethod
-    def _sample_ob(action, next_state):
+    def _compute_prob(action, next_state, ob):
         for pos in next_state.opponent_pos:
             if pos == next_state.agent_pos and action == 0:
                 return 1.
@@ -146,7 +154,7 @@ class TagEnv(Env):
 
     @staticmethod
     def _is_terminal(state):
-        return state.num_alive == 0
+        return len(state.opponent_pos) == 0
 
     @staticmethod
     def _compute_rw(tag_state, action):
@@ -165,30 +173,31 @@ class TagEnv(Env):
     def _admissable_actions(agent_pos, opp_pos):
         actions = []
         if opp_pos.x >= agent_pos.x:
-            actions.append(Moves.LEFT)
+            actions.append(Moves.RIGHT)
         if opp_pos.y >= agent_pos.y:
             actions.append(Moves.UP)
         if opp_pos.x <= agent_pos.x:
-            actions.append(Moves.RIGHT)
+            actions.append(Moves.LEFT)
         if opp_pos.y <= agent_pos.y:
             actions.append(Moves.DOWN)
         if opp_pos.x == agent_pos.x and opp_pos.y > agent_pos.y:
             actions.append(Moves.UP)
         if opp_pos.y == agent_pos.y and opp_pos.x > agent_pos.x:
-            actions.append(Moves.LEFT)
+            actions.append(Moves.RIGHT)
         if opp_pos.x == agent_pos.x and opp_pos.y < agent_pos.y:
             actions.append(Moves.DOWN)
         if opp_pos.y == agent_pos.y and opp_pos.x < agent_pos.x:
-            actions.append(Moves.RIGHT)
+            actions.append(Moves.LEFT)
         assert len(actions) > 0
         return actions
 
 
 class TagState(object):
-    def __init__(self, coord, num_alive=0):
+    def __init__(self, coord):
         self.agent_pos = coord
         self.opponent_pos = []
-        self.num_alive = num_alive
+    def __str__(self):
+        return str(len(self.opponent_pos))
 
 
 if __name__ == '__main__':

@@ -2,7 +2,7 @@ from gym import Env
 from gym.spaces import Discrete
 import numpy as np
 from enum import Enum
-from gym_pomdp.envs.coord import Coord, Grid, Moves
+from gym_pomdp.envs.coord import Coord, Grid, Moves, Tile
 from gym_pomdp.envs.gui import RockGui
 
 
@@ -16,11 +16,11 @@ def action_to_str(action):
     if action == 0:
         return "up"
     elif action == 1:
-        return "left"
-    elif action == 2:
         return "right"
-    elif action == 3:
+    elif action == 2:
         return "down"
+    elif action == 3:
+        return "left"
     elif action == 4:
         return "sample"
     elif action > 4:
@@ -29,20 +29,24 @@ def action_to_str(action):
         raise NotImplementedError()
 
 
+class RockTile(Tile):
+    def __init__(self, coord):
+        super().__init__(coord)
+        self.value = -1
+
+
 class RockGrid(Grid):
     def __init__(self, board_size):
         super().__init__(*board_size)
-
-    def set_values(self, value):
-        for idx in range(self.n_tiles):
-            self.board.append(value)
+        self.build_board(Tile=RockTile)
 
 
 class Rock(object):
-    def __init__(self, coord):
+    def __init__(self, pos):
         self.valuable = np.random.binomial(1, p=.5)
+        self.observation_space = Discrete(len(Obs))
         self.collected = False
-        self.pos = coord
+        self.pos = pos
         self.sampled = 0
         self.measured = 0
         self.lkw = 1.  # likely worthless
@@ -66,12 +70,12 @@ class Rock(object):
 
 
 class RockState(object):
-    def __init__(self, coord):
-        self.agent_pos = coord
+    def __init__(self, pos):
+        self.agent_pos = pos
         self.rocks = []
         self.n_rocks = 0
         self.hed = 20
-        self.target = 0
+        self.target = Coord(-1, -1)
 
 
 class RockEnv(Env):
@@ -82,13 +86,19 @@ class RockEnv(Env):
         self.num_rocks = num_rocks
         self.action_space = Discrete(len(Moves) + num_rocks)
 
+    @staticmethod
+    def compute_rw(state, action):
+        # TODO implement as static
+        pass
+
     def _step(self, action):
+
+        assert self.action_space.contains(action)
+        assert not self.done
 
         reward = 0
         obs = Obs.NULL.value
         self.last_action = action
-
-        assert self.action_space.contains(action)
 
         if not action in self.admissible_actions():
             reward -= 100
@@ -101,8 +111,9 @@ class RockEnv(Env):
             else:
                 self.rock_state.agent_pos += Moves.get_coord(action)
         elif action == 4:
-            agent_idx = self.grid.get_index(self.rock_state.agent_pos)
-            rock = self.grid.board[agent_idx]
+            # agent_idx = self.grid.get_index(self.rock_state.agent_pos)
+            # rock = self.grid.board[agent_idx].value
+            rock = self.grid[self.rock_state.agent_pos].value
             assert rock >= 0
             self.rock_state.rocks[rock].collectd = True
             if self.rock_state.rocks[rock].valuable:
@@ -114,16 +125,16 @@ class RockEnv(Env):
         elif action > 4:
             rock = action - len(Moves)
             assert rock < self.num_rocks and rock >= 0
-            ob = self.get_obs(self.rock_state.agent_pos, self.rock_state.rocks[rock])
+            ob = self._sample_ob(self.rock_state.agent_pos, self.rock_state.rocks[rock])
 
-            eff = RockEnv.sensor_correctnes(self.rock_state.agent_pos, self.rock_state.rocks[rock].pos)
+            eff = RockEnv._sensor_correctnes(self.rock_state.agent_pos, self.rock_state.rocks[rock].pos)
             self.rock_state.rocks[rock].update_prob(ob=ob, eff=eff)
             # if rock >= 0 and not self.rock_state.rocks[rock].collected:
             # else:
             #     reward -= 100
 
-        if self.rock_state.target == -1 or self.rock_state.agent_pos == self.grid.get_coord(self.rock_state.target):
-            self.rock_state.target = self.select_target(self.rock_state, x_size=self.grid.x_size)
+        if self.rock_state.target == Coord(-1, -1) or self.rock_state.agent_pos == self.rock_state.target:
+            self.rock_state.target = self._select_target(self.rock_state, x_size=self.grid.x_size)
 
         # self.done = True if reward == -100 or not self.grid.is_inside(self.rock_state.agent_pos) else False
         self.total_rw += reward
@@ -134,12 +145,13 @@ class RockEnv(Env):
     def _render(self, mode='human', close=False):
         if mode == "human":
             if not hasattr(self, "gui"):
-                agent_idx = self.grid.get_index(self.rock_state.agent_pos)
-                obj_idx = [self.grid.get_index(rock.pos) for rock in self.rock_state.rocks]
-                self.gui = RockGui((self.grid.x_size, self.grid.y_size), start_pos=agent_idx, obj_pos=obj_idx)
+                start_pos = self.grid.get_index(self.rock_state.agent_pos)
+                obj_pos = [self.grid.get_index(rock.pos) for rock in self.rock_state.rocks]
+                self.gui = RockGui((self.grid.x_size, self.grid.y_size), start_pos=start_pos, obj_pos=obj_pos)
+
             msg = "Action : " + action_to_str(self.last_action) + " Step: " + str(self.t) + " Rw: " + str(self.total_rw)
-            idx = self.grid.get_index(self.rock_state.agent_pos)
-            self.gui.render(idx, msg=msg)
+            agent_pos = self.grid.get_index(self.rock_state.agent_pos)
+            self.gui.render(agent_pos, msg=msg)
 
     def _reset(self):
         self.done = False
@@ -151,13 +163,17 @@ class RockEnv(Env):
 
     def _init_state(self):
         self.hed = 20
-        self.rock_state = RockState(Coord(0, self.grid.y_size // 2))
-        self.grid.set_values(value=-1)
+        init_state = Coord(0, self.grid.y_size // 2)
+        self.rock_state = RockState(init_state)
+        # self.grid.build_board(Tile=RockTile)
         for idx in range(self.num_rocks):
-            self.rock_state.rocks.append(Rock(self.grid.sample()))
-            rock_idx = self.grid.get_index(self.rock_state.rocks[idx].pos)
-            self.grid.board[rock_idx] = idx
-        self.rock_state.target = self.select_target(self.rock_state, x_size=self.grid.x_size)
+            # self.rock_state.rocks.append(Rock(self.grid.sample()))
+            # rock_idx = self.grid.get_index(self.rock_state.rocks[idx].pos)
+            # self.grid.board[rock_idx].value  = idx
+            pos = self.grid.sample()
+            self.rock_state.rocks.append(Rock(pos))
+            self.grid[pos].value = idx
+        self.rock_state.target = self._select_target(self.rock_state, x_size=self.grid.x_size)
 
     def admissible_actions(self):
 
@@ -170,44 +186,37 @@ class RockEnv(Env):
         if self.rock_state.agent_pos.x - 1 >= 0:
             legal.append(3)
 
-        agent_idx = self.grid.get_index(self.rock_state.agent_pos)
-        rock = self.grid.board[agent_idx]
+        rock = self.grid[self.rock_state.agent_pos].value
         if rock >= 0 and not self.rock_state.rocks[rock].collected:
             legal.append(4)
 
         for rock in self.rock_state.rocks:
             if not rock.collected:
-                idx = self.grid.get_index(rock.pos)
-                legal.append(self.grid.board[idx] + len(Moves))
+                legal.append(self.grid[rock.pos].value + len(Moves))
         assert self.action_space.contains(max(legal))
         return legal
 
     @staticmethod
-    def compute_rw(state, action):
-        # TODO implement as static
-        pass
-
-    @staticmethod
-    def sensor_correctnes(agent_pos, rock_pos, hed=20):
+    def _sensor_correctnes(agent_pos, rock_pos, hed=20):
         d = Grid.euclidean_distance(agent_pos, rock_pos)
         eff = (1 + pow(2, -d / hed)) * .5
         return eff
 
     @staticmethod
-    def select_target(rock_state, x_size):
+    def _select_target(rock_state, x_size):
         best_dist = x_size * 2
-        best_rock = -1
-        for idx, rock in enumerate(rock_state.rocks):
+        best_rock = Coord(-1, -1)
+        for rock in rock_state.rocks:
             if not rock.collected and rock.sampled >= 0:
                 d = Grid.manhattan_distance(rock_state.agent_pos, rock.pos)
                 if d < best_dist:
                     best_dist = d
-                    best_rock = idx
+                    best_rock = rock.pos
         return best_rock
 
     @staticmethod
-    def get_obs(agent_pos, rock, hed=20):
-        eff = RockEnv.sensor_correctnes(agent_pos, rock.pos, hed=hed)
+    def _sample_ob(agent_pos, rock, hed=20):
+        eff = RockEnv._sensor_correctnes(agent_pos, rock.pos, hed=hed)
         if np.random.random() > eff:
             return Obs.GOOD.value if rock.valuable else Obs.BAD.value
         else:
