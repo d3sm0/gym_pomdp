@@ -19,15 +19,12 @@ def action_to_str(action):
     else:
         raise NotImplementedError()
 
-class TagTile(Tile):
-    def __init__(self, coord):
-        super().__init__(coord)
 
 class TagGrid(Grid):
     def __init__(self, board_size, obs_cells=29):
         super().__init__(*board_size)
+        self.build_board(0)
         self.n_tiles = obs_cells
-        self.build_board(TagTile)
 
     def is_inside(self, coord):
         if coord.y >= 2:
@@ -196,6 +193,7 @@ class TagState(object):
     def __init__(self, coord):
         self.agent_pos = coord
         self.opponent_pos = []
+
     def __str__(self):
         return str(len(self.opponent_pos))
 

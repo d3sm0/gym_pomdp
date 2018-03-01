@@ -1,36 +1,57 @@
 import numpy as np
 from enum import Enum
+from collections import namedtuple
 
 
-class Coord(object):
-    def __init__(self, x=0, y=0):
-        self.x = x  # rows
-        self.y = y  # columns
-
-    def __eq__(self, other):
-        return self.x == other.x and self.y == other.y
+class Coord(namedtuple("Coord", ["x", "y"])):
+    __slots__ = ()
 
     def __add__(self, other):
         x = self.x + other.x
         y = self.y + other.y
         return Coord(x, y)
 
-    def __mul__(self, other):
-        self.x *= other.x
-        self.y *= other.y
-        return Coord(self.x, self.y)
+    # def copy(self):
+    #     return Coord(self.x, self.y)
 
     def __str__(self):
         return "{},{}".format(self.x, self.y)
 
-    def copy(self):
-        return Coord(self.x, self.y)
-
     def is_valid(self):
         return self.x >= 0 and self.y >= 0
-    @property
-    def to_list(self):
-        return (self.x, self.y)
+
+
+# TODO May use namedtuple instead
+# class Coord(object):
+#     def __init__(self, x=0, y=0):
+#         self.x = x  # rows
+#         self.y = y  # columns
+#
+#     def __eq__(self, other):
+#         return self.x == other.x and self.y == other.y
+#
+#     def __add__(self, other):
+#         x = self.x + other.x
+#         y = self.y + other.y
+#         return Coord(x, y)
+#
+#     def __mul__(self, other):
+#         self.x *= other.x
+#         self.y *= other.y
+#         return Coord(self.x, self.y)
+#
+#     def __str__(self):
+#         return "{},{}".format(self.x, self.y)
+#
+#     def copy(self):
+#         return Coord(self.x, self.y)
+#
+#     def is_valid(self):
+#         return self.x >= 0 and self.y >= 0
+#
+#     @property
+#     def to_list(self):
+#         return (self.x, self.y)
 
 
 class Tile(object):
@@ -50,25 +71,30 @@ class Grid(object):
     def __iter__(self):
         return iter(self.board)
 
-    def __setitem__(self, coord, value):
-        idx = self.get_index(coord)
-        self.board[idx] = value
+    def __setitem__(self, idx, value):
+        try:
+            self.board[idx] = value
+        except IndexError:
+            raise IndexError()
 
-    def __getitem__(self, coord):
-        idx = self.get_index(coord)
-        return self.board[idx]
+    def __getitem__(self, idx):
+        try:
+            return self.board[idx]
+        except IndexError:
+            return None
 
-    def build_board(self, Tile):
+    def build_board(self, value=0):
         self.board = []
         for idx in range(self.n_tiles):
-            coord = self.get_coord(idx)
-            self.board.append(Tile(coord = coord))
+            self.board.append(value)
+        self.board = np.asarray(self.board).reshape((self.x_size, self.y_size))
 
     def set_value(self, value, coord):
         raise NotImplementedError()
         # idx = self.get_index(coord)
         # self.board[idx] = value
         #
+
     def get_value(self, coord):
         raise NotImplementedError()
         # idx = self.get_index(coord)
@@ -89,8 +115,6 @@ class Grid(object):
         assert idx >= 0 and idx < self.n_tiles
         return Coord(idx % self.x_size, idx // self.x_size)
 
-    # def sample(self):
-    #     return self.get_coord(np.random.randint(self.n_tiles))  # sample over n-1 cells
     def sample(self):
         return self.get_coord(np.random.randint(self.n_tiles))
 
@@ -100,7 +124,7 @@ class Grid(object):
 
     @staticmethod
     def euclidean_distance(c1, c2):
-        return np.linalg.norm(np.subtract(c1.to_list(), c2.to_list()), 1)
+        return np.linalg.norm(np.subtract(c1, c2), 1)
 
     @staticmethod
     def manhattan_distance(c1, c2):
@@ -147,7 +171,7 @@ class TestCoord(TestCase):
     assert (Coord(2, 2) + Moves.DOWN.value) == Coord(2, 1)
     assert (Coord(2, 2) + Moves.RIGHT.value) == Coord(3, 2)
 
-    grid = Grid()
+    # grid = Grid()
 
 
 if __name__ == "__main__":

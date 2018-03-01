@@ -2,7 +2,7 @@ from enum import Enum
 import numpy as np
 from gym import Env
 from gym.spaces import Discrete
-from gym_pomdp.envs.coord import Grid, Coord, Tile
+from gym_pomdp.envs.coord import Grid, Coord
 from gym_pomdp.envs.gui import ShipGui
 
 
@@ -40,9 +40,8 @@ class ShipState(object):
         self.total_remaining = 0
 
 
-class Cell(Tile):
-    def __init__(self, coord):
-        super().__init__(coord=coord)
+class Cell(object):
+    def __init__(self):
         self.occupied = False
         self.visited = False
         self.diagonal = False
@@ -51,6 +50,12 @@ class Cell(Tile):
 class BattleGrid(Grid):
     def __init__(self, board_size):
         super().__init__(*board_size)
+
+    def build_board(self, value=0):
+        self.board = []
+        for idx in range(self.n_tiles):
+            self.board.append(Cell())
+        self.board = np.asarray(self.board).reshape((self.x_size, self.y_size))
 
 
 class BattleShipEnv(Env):
@@ -73,7 +78,8 @@ class BattleShipEnv(Env):
         self.last_action = action
         self.t += 1
         action_pos = self.grid.get_coord(action)
-        cell = self.grid.get_value(action_pos)
+        # cell = self.grid.get_value(action_pos)
+        cell = self.grid[action_pos]
         reward = 0
         if cell.visited:
             reward -= 10
@@ -85,8 +91,8 @@ class BattleShipEnv(Env):
                 self.bsstate.total_remaining -= 1
 
                 for d in range(4, 8):
-                    if self.grid.is_inside(action_pos + Compass.get_coord(d)):
-                        self.grid.get_value(action_pos + Compass.get_coord(d)).diagonal = False
+                    if self.grid[action_pos + Compass.get_coord(d)]:
+                        self.grid[action_pos + Compass.get_coord(d)].diagonal = False
             else:
                 reward -= 1
                 obs = Obs.NULL.value
@@ -110,14 +116,14 @@ class BattleShipEnv(Env):
             if not hasattr(self, "gui"):
                 obj_pos = []
                 for ship in self.bsstate.ships:
-                    pos = ship.pos.copy()
+                    pos = ship.pos
                     obj_pos.append(self.grid.get_index(pos))
                     for i in range(ship.length):
                         pos += Compass.get_coord(ship.direction)
                         obj_pos.append(self.grid.get_index(pos))
                 self.gui = ShipGui(board_size=self.grid.get_size(), obj_pos=obj_pos)
-            if self.t >0:
-                msg = "A: " + str(self.grid.get_coord(self.last_action).to_list()) + "T: " + str(self.t) + "Rw :" + str(
+            if self.t > 0:
+                msg = "A: " + str(self.grid.get_coord(self.last_action)) + "T: " + str(self.t) + "Rw :" + str(
                     self.tot_rw)
                 self.gui.render(state=self.last_action, msg=msg)
 
@@ -126,7 +132,7 @@ class BattleShipEnv(Env):
 
     def _init_state(self):
         self.bsstate = ShipState()
-        self.grid.build_board(Tile=Cell)
+        self.grid.build_board()
 
         for length in reversed(range(2, self.max_len)):
             # num_ships = 1
@@ -140,10 +146,10 @@ class BattleShipEnv(Env):
 
     def mark_ship(self, ship):
 
-        pos = ship.pos.copy()
+        pos = ship.pos  # .copy()
 
         for i in range(ship.length):
-            cell = self.grid.get_value(pos)
+            cell = self.grid[pos]
             assert not cell.occupied
             cell.occupied = True
             if not cell.visited:
@@ -152,16 +158,17 @@ class BattleShipEnv(Env):
 
     def collision(self, ship):
 
-        pos = ship.pos.copy()
+        pos = ship.pos  # .copy()
         for i in range(ship.length):
             if not self.grid.is_inside(pos + Compass.get_coord(ship.direction)):
                 return True
-            cell = self.grid.get_value(pos)
+            # cell = self.grid.get_value(pos)
+            cell = self.grid[pos]
             if cell.occupied:
                 return True
             for adj in range(8):
                 coord = pos + Compass.get_coord(adj)
-                if self.grid.is_inside(coord) and self.grid.get_value(coord).occupied:
+                if self.grid.is_inside(coord) and self.grid[coord].occupied:
                     return True
             pos += Compass.get_coord(ship.direction)
         return False

@@ -20,13 +20,17 @@ class Action(Enum):
     LEFT = 0
     RIGHT = 1
     LISTEN = 2
+
+
 def state_to_str(state):
     if state == 0:
         return "left"
-    elif state==1:
+    elif state == 1:
         return "right"
     else:
         raise NotImplementedError()
+
+
 def action_to_str(action):
     if action == 0:
         return "left"
@@ -36,6 +40,7 @@ def action_to_str(action):
         return "listen"
     else:
         raise NotImplementedError()
+
 
 class TigerEnv(gym.Env):
     metadata = {"render.modes": ["human", "ansi"]}
