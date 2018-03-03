@@ -66,14 +66,14 @@ class BattleShipEnv(Env):
         self.action_space = Discrete(self.grid.n_tiles)
         self.observation_space = Discrete(len(Obs))
         self.num_obs = 2
-        self.rw_range = self.action_space.n / 4.
-        self.discount = 1.
+        self._reward_range = self.action_space.n / 4.
+        self._discount = 1.
         self.total_remaining = max_len - 1
         self.max_len = max_len + 1
 
     def _step(self, action):
 
-        assert self.done == False
+        # assert self.done == False
         assert self.action_space.contains(action)
         self.last_action = action
         self.t += 1
@@ -88,7 +88,7 @@ class BattleShipEnv(Env):
             if cell.occupied:
                 reward -= 1
                 obs = 1
-                self.bsstate.total_remaining -= 1
+                self.state.total_remaining -= 1
 
                 for d in range(4, 8):
                     if self.grid[action_pos + Compass.get_coord(d)]:
@@ -97,25 +97,31 @@ class BattleShipEnv(Env):
                 reward -= 1
                 obs = Obs.NULL.value
             cell.visited = True
-        if self.bsstate.total_remaining == 0:
+        if self.state.total_remaining == 0:
             reward += self.grid.n_tiles
             self.done = True
         self.tot_rw += reward
-        return obs, reward, self.done, {"state": self.bsstate}
+        return obs, reward, self.done, {"state": self.state}
+
+    def _set_state(self, state):
+        self.reset()
+        self.state = state
 
     def _reset(self):
         self.done = False
         self.tot_rw = 0
         self.t = 0
         self.last_action = -1
-        self._init_state()
+        self.state = self._get_init_state()
         return Obs.NULL.value
 
     def _render(self, mode='human', close=False):
+        if close:
+            return
         if mode == 'human':
             if not hasattr(self, "gui"):
                 obj_pos = []
-                for ship in self.bsstate.ships:
+                for ship in self.state.ships:
                     pos = ship.pos
                     obj_pos.append(self.grid.get_index(pos))
                     for i in range(ship.length):
@@ -127,11 +133,17 @@ class BattleShipEnv(Env):
                     self.tot_rw)
                 self.gui.render(state=self.last_action, msg=msg)
 
-    def _close(self):
-        pass
+    def _generate_legal(self):
+        actions = []
+        for action in range(self.action_space.n):
+            action_pos = self.grid.get_coord(action)
+            if not self.grid[action_pos].visited:
+                actions.append(action)
 
-    def _init_state(self):
-        self.bsstate = ShipState()
+        return actions
+
+    def _get_init_state(self):
+        bsstate = ShipState()
         self.grid.build_board()
 
         for length in reversed(range(2, self.max_len)):
@@ -139,36 +151,39 @@ class BattleShipEnv(Env):
             # for idx in range(num_ships):
             while True:  # add one ship of each kind
                 ship = Ship(coord=self.grid.sample(), length=length)
-                if not self.collision(ship):
+                if not self.collision(ship, self.grid, bsstate):
                     break
-            self.mark_ship(ship)
-            self.bsstate.ships.append(ship)
+            self.mark_ship(ship, self.grid, bsstate)
+            bsstate.ships.append(ship)
+        return bsstate
 
-    def mark_ship(self, ship):
+    @staticmethod
+    def mark_ship(ship, grid, state):
 
         pos = ship.pos  # .copy()
 
         for i in range(ship.length):
-            cell = self.grid[pos]
+            cell = grid[pos]
             assert not cell.occupied
             cell.occupied = True
             if not cell.visited:
-                self.bsstate.total_remaining += 1
+                state.total_remaining += 1
             pos += Compass.get_coord(ship.direction)
 
-    def collision(self, ship):
+    @staticmethod
+    def collision(ship, grid, state):
 
         pos = ship.pos  # .copy()
         for i in range(ship.length):
-            if not self.grid.is_inside(pos + Compass.get_coord(ship.direction)):
+            if not grid.is_inside(pos + Compass.get_coord(ship.direction)):
                 return True
-            # cell = self.grid.get_value(pos)
-            cell = self.grid[pos]
+            # cell = grid.get_value(pos)
+            cell = grid[pos]
             if cell.occupied:
                 return True
             for adj in range(8):
                 coord = pos + Compass.get_coord(adj)
-                if self.grid.is_inside(coord) and self.grid[coord].occupied:
+                if grid.is_inside(coord) and grid[coord].occupied:
                     return True
             pos += Compass.get_coord(ship.direction)
         return False

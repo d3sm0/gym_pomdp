@@ -50,12 +50,14 @@ class TigerEnv(gym.Env):
         self.action_space = Discrete(len(Action))
         self.state_space = Discrete(len(State))
         self.observation_space = Discrete(len(Obs))
+        self._discount = .95
+        self._reward_range = 10
         self.seed(seed)
 
     def _reset(self):
         self.done = False
         self.t = 0
-        self.tiger_state = self.state_space.sample()
+        self.state = self.state_space.sample()
         self.last_action = Action.LISTEN.value
         return Obs.NULL.value
 
@@ -71,14 +73,14 @@ class TigerEnv(gym.Env):
         self.t += 1
         self.last_action = action
 
-        rw = TigerEnv._compute_rw(self.tiger_state, action)
-        if TigerEnv._is_terminal(self.tiger_state, action):
-            return self.tiger_state, rw, True, dict(state=self.tiger_state, p_ob=1.)
+        rw = TigerEnv._compute_rw(self.state, action)
+        if TigerEnv._is_terminal(self.state, action):
+            return self.state, rw, True, dict(state=self.state, p_ob=1.)
 
         self._sample_state(action)
-        ob = TigerEnv._sample_ob(action, self.tiger_state)
-        p_ob = TigerEnv._compute_prob(action, self.tiger_state, ob)
-        return ob, rw, False, {"state": self.tiger_state, "p_ob": p_ob}
+        ob = TigerEnv._sample_ob(action, self.state)
+        p_ob = TigerEnv._compute_prob(action, self.state, ob)
+        return ob, rw, False, {"state": self.state, "p_ob": p_ob}
 
     def _render(self, mode='human', close=False):
         if close:
@@ -86,10 +88,10 @@ class TigerEnv(gym.Env):
         if mode == "human":
             if not hasattr(self, "gui"):
                 self.gui = TigerGui()
-            msg = "A: " + action_to_str(self.last_action) + " S: " + state_to_str(self.tiger_state)
-            self.gui.render(state=(self.last_action, self.tiger_state), msg=msg)
+            msg = "A: " + action_to_str(self.last_action) + " S: " + state_to_str(self.state)
+            self.gui.render(state=(self.last_action, self.state), msg=msg)
         elif mode == "ansi":
-            print("Current step: {}, tiger is in state: {}, action took: {}".format(self.t, self.tiger_state,
+            print("Current step: {}, tiger is in state: {}, action took: {}".format(self.t, self.state,
                                                                                     self.last_action[0]))
         else:
             raise NotImplementedError()
@@ -97,14 +99,18 @@ class TigerEnv(gym.Env):
     def _close(self):
         self._render(close=True)
 
-    def set_state(self, state):
-        self.tiger_state = state
+    def _set_state(self, state):
+        self.state = state
+        self.done = False
+
+    def _generate_legal(self):
+        return list(range(self.action_space.n))
 
     def _sample_state(self, action):
         if action == Action.RIGHT.value or action == Action.LEFT.value:
-            self.tiger_state = self.state_space.sample()
+            self.state = self.state_space.sample()
 
-    def _get_start_state(self):
+    def _get_init_state(self):
         return self.state_space.sample()
 
     @staticmethod
@@ -134,6 +140,10 @@ class TigerEnv(gym.Env):
         return ob
 
     @staticmethod
+    def _local_move(state, last_action, last_ob):
+        raise NotImplementedError()
+
+    @staticmethod
     def _is_terminal(state, action):
         is_terminal = False
         if action != Action.LISTEN.value:
@@ -149,7 +159,7 @@ class TigerEnv(gym.Env):
         elif not TigerEnv._is_terminal(state, action):
             reward = 10
         else:
-            reward = -100
+            reward = -20
         return reward
 
 

@@ -48,24 +48,28 @@ class TagGrid(Grid):
         return 20 + (coord.y - 2 * 3) + coord.x - 5
 
 
+grid = TagGrid((10, 5), obs_cells=29)
+
+
 class TagEnv(Env):
     metadata = {"render.modes": ["human", "ansi"]}
 
     def __init__(self, board_size=(10, 5), num_opponents=4, obs_cells=29, static_param=.8):
         self.num_opponents = num_opponents
         self.static_param = static_param
-        self.rw_range = (-10 * self.num_opponents, 10 * self.num_opponents)
+        self._reward_range = 10 * self.num_opponents  # (-10 * self.num_opponents, 10 * self.num_opponents)
+        self._discount = .95
         self.action_space = Discrete(len(Moves))
         self.grid = TagGrid(board_size, obs_cells=obs_cells)
-        self.observation_space = Discrete(self.grid.n_tiles)
+        self.observation_space = Discrete(self.grid.n_tiles + 1)
         self.time = 0
 
     def _reset(self):
         self.done = False
         self.time = 0
         self.last_action = 4
-        self._get_start_state()
-        return self._sample_ob(action=0)  # get agent position
+        self.state = self._get_init_state()
+        return self._sample_ob(state=self.state, action=0)  # get agent position
 
     def _seed(self, seed=None):
         np.random.seed(seed)
@@ -73,72 +77,75 @@ class TagEnv(Env):
 
     def _step(self, action):  # state
         assert self.action_space.contains(action)  # action are idx of movements
-        assert self.done == False
+        # assert self.done == False
 
         reward = 0.
         self.time += 1
         self.last_action = action
         if action == 4:
             tagged = False
-            for opp, opp_pos in enumerate(self.tag_state.opponent_pos):
-                if opp_pos == self.tag_state.agent_pos:  # check if x==x_agent and y==y_agent
+            for opp, opp_pos in enumerate(self.state.opponent_pos):
+                if opp_pos == self.state.agent_pos:  # check if x==x_agent and y==y_agent
                     reward = 10.
                     tagged = True
-                    print("tagged")
+                    # print("tagged")
                     # self.tag_state.num_alive -= 1
-                    self.tag_state.opponent_pos.pop(opp)
-                elif self.tag_state.opponent_pos[opp].is_valid():
+                    self.state.opponent_pos.pop(opp)
+                elif self.state.opponent_pos[opp].is_valid():
                     self.move_opponent(opp)
             if not tagged:
                 reward = -10.
 
         else:
             reward = -1.
-            next_pos = self.tag_state.agent_pos + Moves.get_coord(action)
+            next_pos = self.state.agent_pos + Moves.get_coord(action)
             if self.grid.is_inside(next_pos):
-                self.tag_state.agent_pos = next_pos
+                self.state.agent_pos = next_pos
 
-        ob = self._sample_ob(action)
-        p_ob = self._compute_prob(action, self.tag_state, ob)
-        done = TagEnv._is_terminal(self.tag_state)
-        return ob, reward, done, {"state": self.tag_state, "p_ob": p_ob}
+        ob = self._sample_ob(self.state, action)
+        p_ob = self._compute_prob(action, self.state, ob)
+        done = TagEnv._is_terminal(self.state)
+        return ob, reward, done, {"state": self.state, "p_ob": p_ob}
 
     def _render(self, mode="human", close=False):
         if close:
             return
         if mode == "human":
 
-            agent_pos = self.grid.get_index(self.tag_state.agent_pos)
-            obj_pos = [self.grid.get_index(opp) for opp in self.tag_state.opponent_pos]
+            agent_pos = self.grid.get_index(self.state.agent_pos)
+            obj_pos = [self.grid.get_index(opp) for opp in self.state.opponent_pos]
             if not hasattr(self, "gui"):
                 self.gui = TagGui(board_size=self.grid.get_size(), start_pos=agent_pos, obj_pos=obj_pos)
-            msg = "S: " + str(self.tag_state) + " T: " + str(self.time) + " A: " + action_to_str(
+            msg = "S: " + str(self.state) + " T: " + str(self.time) + " A: " + action_to_str(
                 self.last_action)
             self.gui.render(state=(agent_pos, obj_pos), msg=msg)
 
-    def _get_start_state(self):
-        self.tag_state = TagState(self.grid.sample())
-        for opp in range(self.num_opponents):
-            self.tag_state.opponent_pos.append(self.grid.sample())
-        return self.tag_state
+    def _get_init_state(self):
 
-    def set_state(self, state):
-        self.tag_state = state
+        tag_state = TagState(self.grid.sample())
+        for opp in range(self.num_opponents):
+            tag_state.opponent_pos.append(self.grid.sample())
+        return tag_state
+
+    def _set_state(self, state):
+        self.reset()
+        self.state = state
 
     def move_opponent(self, opp):
-        opp_pos = self.tag_state.opponent_pos[opp]
-        actions = self._admissable_actions(self.tag_state.agent_pos, opp_pos)
+        opp_pos = self.state.opponent_pos[opp]
+        actions = self._admissable_actions(self.state.agent_pos, opp_pos)
         if np.random.uniform(0, 1) > self.static_param:
             move = np.random.choice(actions).value
             if self.grid.is_inside(opp_pos + move):
-                self.tag_state.opponent_pos[opp] = opp_pos + move
+                self.state.opponent_pos[opp] = opp_pos + move
 
-    def _sample_ob(self, action):
-        obs = self.grid.get_index(self.tag_state.agent_pos)  # agent index
+    @staticmethod
+    def _sample_ob(state, action):
+        obs = grid.get_index(state.agent_pos)  # agent index
         if action > 0:
-            for opp_pos in self.tag_state.opponent_pos:
-                if opp_pos == self.tag_state.agent_pos:
-                    obs = self.grid.n_tiles  # number of cells that can observe
+            for opp_pos in state.opponent_pos:
+                if opp_pos == state.agent_pos:
+                    obs = grid.n_tiles  # number of cells that can observe
 
         return obs
 
@@ -165,6 +172,24 @@ class TagEnv(Env):
         else:
             reward = -1
         return reward
+
+    def _generate_legal(self):
+        return list(range(self.action_space.n))
+
+    def _local_move(self, state, last_action, last_ob):
+        if len(state.opponent_pos) > 0:
+            opp = np.random.randint(len(state.opponent_pos))
+        else:
+            return False
+
+        if state.opponent_pos[opp] == Coord(-1, -1):
+            return False
+        state.opponent_pos[opp] = self.grid.sample()
+        if last_ob != self.grid.get_index(state.agent_pos):
+            state.agent_pos = self.grid.get_coord(last_ob)
+
+        ob = self._sample_ob(state, last_action)
+        return ob == last_ob
 
     @staticmethod
     def _admissable_actions(agent_pos, opp_pos):

@@ -23,3 +23,8 @@ register(
     # max_episode_steps = 400,
     entry_point="gym_pomdp.envs:RockEnv"
 )
+register(
+    id="Test-v0",
+    # max_episode_steps = 400,
+    entry_point="gym_pomdp.envs:TestEnv"
+)
