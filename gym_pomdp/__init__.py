@@ -24,6 +24,11 @@ register(
     entry_point="gym_pomdp.envs:RockEnv"
 )
 register(
+    id="Network-v0",
+    # max_episode_steps = 400,
+    entry_point="gym_pomdp.envs:NetworkEnv"
+)
+register(
     id="Test-v0",
     # max_episode_steps = 400,
     entry_point="gym_pomdp.envs:TestEnv"

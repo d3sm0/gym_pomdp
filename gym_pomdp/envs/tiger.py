@@ -50,7 +50,7 @@ class TigerEnv(gym.Env):
         self.action_space = Discrete(len(Action))
         self.state_space = Discrete(len(State))
         self.observation_space = Discrete(len(Obs))
-        self._discount = .95
+        self._discount = 1.
         self._reward_range = 10
         self.seed(seed)
 
