@@ -11,6 +11,8 @@ class Obs(Enum):
 
 
 class NetworkEnv(Env):
+    metadata = {"render.modes": ["ansi"]}
+
     def __init__(self, n_machines=4, _type="ring"):
         self._p = .1  # failure prob
         self._q = 1 / 3
@@ -74,9 +76,11 @@ class NetworkEnv(Env):
 
         return ob, reward, self.done, {"state": self.state}
 
-    def _render(self, mode='human', close=False):
+    def _render(self, mode="ansi", close=False):
         if close:
             return
+
+        print("Current machines {}".format(self.state), sep="\t")
 
     def _get_init_state(self):
         return np.ones(self._n_machines, dtype=np.int32)
@@ -119,7 +123,8 @@ if __name__ == "__main__":
     for idx in range(100):
         action = env.action_space.sample()
         ob, rw, done, _ = env.step(action)
-        print(ob)
+        env.render(mode = "ansi")
+        # print(ob)
         r += rw
 
     # print(rw)
