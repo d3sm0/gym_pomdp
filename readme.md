@@ -38,7 +38,7 @@ in the specific environment.
 [Similar work](https://github.com/pemami4911/POMDPy)
 
 ## Special thanks
-David Silver and Van hess made this possible by releasing the code POMCP open source. 
+David Silver and Joel Veness made this possible by releasing the code POMCP open source. 
 And [@manuel](https://github.com/manuel-delverme) for proof test.
 
 ## TODO
