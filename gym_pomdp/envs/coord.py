@@ -11,47 +11,11 @@ class Coord(namedtuple("Coord", ["x", "y"])):
         y = self.y + other.y
         return Coord(x, y)
 
-    # def copy(self):
-    #     return Coord(self.x, self.y)
-
     def __str__(self):
         return "{},{}".format(self.x, self.y)
 
     def is_valid(self):
         return self.x >= 0 and self.y >= 0
-
-
-# TODO May use namedtuple instead
-# class Coord(object):
-#     def __init__(self, x=0, y=0):
-#         self.x = x  # rows
-#         self.y = y  # columns
-#
-#     def __eq__(self, other):
-#         return self.x == other.x and self.y == other.y
-#
-#     def __add__(self, other):
-#         x = self.x + other.x
-#         y = self.y + other.y
-#         return Coord(x, y)
-#
-#     def __mul__(self, other):
-#         self.x *= other.x
-#         self.y *= other.y
-#         return Coord(self.x, self.y)
-#
-#     def __str__(self):
-#         return "{},{}".format(self.x, self.y)
-#
-#     def copy(self):
-#         return Coord(self.x, self.y)
-#
-#     def is_valid(self):
-#         return self.x >= 0 and self.y >= 0
-#
-#     @property
-#     def to_list(self):
-#         return (self.x, self.y)
 
 
 class Tile(object):
@@ -100,7 +64,7 @@ class Grid(object):
         # idx = self.get_index(coord)
         # assert coord == self.board[idx].coord
         # return self.board[idx]
-
+    @property
     def get_size(self):
         return (self.x_size, self.y_size)
 

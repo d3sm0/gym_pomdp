@@ -121,7 +121,7 @@ class RockEnv(Env):
                     reward -= 10
             else:
                 reward -= 100
-
+            # p_ob = self.state.rocks[rock].prob_valuable
         elif action > 4:
             rock = action - len(Moves)
             assert rock < self.num_rocks and rock >= 0
@@ -129,6 +129,7 @@ class RockEnv(Env):
 
             eff = RockEnv._sensor_correctnes(self.state.agent_pos, self.state.rocks[rock].pos)
             self.state.rocks[rock].update_prob(ob=obs, eff=eff)
+            # p_ob = self.state.rocks[rock].prob_valuable
 
         if self.state.target == Coord(-1, -1) or self.state.agent_pos == self.state.target:
             self.state.target = self._select_target(self.state, self.grid.x_size)
@@ -138,7 +139,7 @@ class RockEnv(Env):
 
         # self.done = not self.grid.is_inside(self.state.agent_pos) or all(
         #     rock.collected for rock in self.state.rocks)
-        return obs, reward, self.done, {"state": self.state}
+        return obs, reward, self.done, {"state": self.state, "p_ob":p_ob}
 
     def _render(self, mode='human', close=False):
         if close:
@@ -169,7 +170,47 @@ class RockEnv(Env):
         self.state = state
 
     def _close(self):
-        self.render(close = True)
+        self.render(close=True)
+
+    def _compute_prob(self, action, next_state, ob):
+        # TODO This is still wrong i should check with someone else code
+        p_ob = 0
+        if action > 4 and ob == Obs.NULL.value:
+            return 0
+        elif action > 4:
+            hed = self._sensor_correctnes(next_state.agent_pos, next_state.rocks[action - len(Moves)])
+            if ob == Obs.GOOD.value and next_state.rocks[action-len(Moves)].valuable:
+                return hed
+            elif ob == Obs.BAD.value and next_state.rocks[action-len(Moves)].valuable:
+                return 1-hed
+        return p_ob
+
+
+    def _compute_rw(self, state, action):
+        reward = 0
+        if not action in self._generate_legal():
+            reward -= 100
+            self.done = True
+        elif action < 4:
+            if action == 1 and self.grid.is_inside(self.state.agent_pos + Moves.get_coord(action)):
+                self.state.agent_pos += Moves.get_coord(action)
+            elif action == 1:
+                reward += 10
+                self.done = True  # try to escape left, and we let it go
+            else:
+                self.state.agent_pos += Moves.get_coord(action)
+        elif action == 4:
+            rock = self.grid[self.state.agent_pos]
+            assert rock >= 0
+            if rock >= 0 and not self.state.rocks[rock].collected:
+                self.state.rocks[rock].collectd = True
+                if self.state.rocks[rock].valuable:
+                    reward += 10
+                else:
+                    reward -= 10
+            else:
+                reward -= 100
+
     def _get_init_state(self):
 
         self.grid.build_board(value=-1)
@@ -208,6 +249,7 @@ class RockEnv(Env):
 
     @staticmethod
     def _sensor_correctnes(agent_pos, rock_pos, hed=20):
+        # TODO check me
         d = Grid.euclidean_distance(agent_pos, rock_pos)
         eff = (1 + pow(2, -d / hed)) * .5
         return eff

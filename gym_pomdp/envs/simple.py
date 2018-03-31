@@ -27,7 +27,7 @@ class TestEnv(Env):
             rw = 0.0
         ob = self.observation_space.sample()
         self.state += 1
-        return ob, rw, False, None
+        return ob, rw, False, {"state": self.state, "p_ob": 1.}
 
     def optimal_value(self):
         discount = 1.

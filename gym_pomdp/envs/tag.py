@@ -140,21 +140,32 @@ class TagEnv(Env):
                 self.state.opponent_pos[opp] = opp_pos + move
 
     @staticmethod
+    def _compute_prob(action, next_state, ob, correct_prob=.85):
+        p_ob = 0.0
+
+        if action == 4 and ob == grid.n_tiles:
+            return 0
+        elif action == 4 and ob == grid.get_index(next_state.agent_pos):
+            return 1
+        elif action < 4 and ob == grid.n_tiles:
+            for opp_pos in next_state.opponent_pos:
+                if opp_pos == next_state.agent_pos:
+                    return 1
+        elif action < 4 and ob == grid.get_index(next_state.agent_pos):
+            return 1
+
+        assert p_ob >= 0.0 and p_ob <= 1.0
+        return p_ob
+
+    @staticmethod
     def _sample_ob(state, action):
         obs = grid.get_index(state.agent_pos)  # agent index
-        if action > 0:
+        if action < 4:
             for opp_pos in state.opponent_pos:
                 if opp_pos == state.agent_pos:
                     obs = grid.n_tiles  # number of cells that can observe
 
         return obs
-
-    @staticmethod
-    def _compute_prob(action, next_state, ob):
-        for pos in next_state.opponent_pos:
-            if pos == next_state.agent_pos and action == 0:
-                return 1.
-        return 0
 
     @staticmethod
     def _is_terminal(state):
