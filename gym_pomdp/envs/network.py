@@ -14,16 +14,16 @@ class Obs(Enum):
 class NetworkEnv(Env):
     metadata = {"render.modes": ["ansi"]}
 
-    def __init__(self, n_machines=10, _type="ring"):
+    def __init__(self, n_machines=10, _type=3):
         self._p = .1  # failure prob
         self._q = 1 / 3
         self._n_machines = n_machines
-        self.action_space = Discrete(n_machines)
-        self.observation_space = Discrete(3)
+        self.action_space = Discrete(n_machines * 2 + 1)
+        self.observation_space = Discrete(len(Obs))
         self._discount = .95
         self._reward_range = n_machines * 2
         self.neighbours = self.make_3legs_neighbours(
-            self._n_machines) if _type == "ring" else self.make_ring_neighbours(n_machines)
+            self._n_machines) if _type == 3 else self.make_ring_neighbours(n_machines)
 
     def _compute_prob(self, action, next_state, ob):
         return self._p_ob
@@ -31,17 +31,18 @@ class NetworkEnv(Env):
     @property
     def _p_ob(self):
         return .95
+
     def reset(self):
         self.done = False
         self.t = 0
         self.state = self._get_init_state()
-        return 0
+        return Obs.OFF.value
 
     def step(self, action):
 
         assert self.action_space.contains(action)
         reward = 0
-        ob = 2
+        ob = Obs.NULL.value
         n_failures = np.zeros(self._n_machines, dtype=np.int32)
 
         for i in range(self._n_machines):
@@ -57,28 +58,24 @@ class NetworkEnv(Env):
 
         for idx in range(self._n_machines):
             if self.state[idx]:
-                if len(self.neighbours[idx]) > 2:  # server
+                if len(self.neighbours[idx]) > 2:
                     reward += 2
                 else:
                     reward += 1
-
         if action < self._n_machines * 2:
-            machine = action // 2
-            reboot = action % 2
-
+            machine, reboot = divmod(action, 2)
             if reboot:
                 reward -= 2.5
                 self.state[machine] = 1
-                ob = np.random.binomial(1, self._p_ob)
-
+                ob = np.random.binomial(1, p=self._p_ob)
             else:
                 reward -= .1
-                if np.random.binomial(1, self._p_ob):
+                if np.random.binomial(1, p=self._p_ob):
                     ob = self.state[machine]
                 else:
                     ob = 1 - self.state[machine]
 
-        return ob, reward, self.done, {"state": self.state, "p_ob": .95}
+        return ob, reward, self.done, {"state": self.state, "p_ob": self._p_ob}
 
     def render(self, mode="ansi", close=False):
         if close:
@@ -125,14 +122,16 @@ class NetworkEnv(Env):
 
 if __name__ == "__main__":
 
-    env = NetworkEnv()
+    env = NetworkEnv(n_machines=16)
     env.reset()
     r = 0
-    for idx in range(100):
-        action = env.action_space.sample()
+    for idx in range(60):
+        # action = env.action_space.sample()
+        action = 2 * 16
         ob, rw, done, _ = env.step(action)
         env.render(mode="ansi")
         # print(ob)
         r += rw
+    print(r/16)
 
     # print(rw)

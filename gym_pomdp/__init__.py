@@ -1,5 +1,6 @@
-from gym.envs.registration import register
 import logging
+
+from gym.envs.registration import register
 
 logger = logging.getLogger(__name__)
 
@@ -7,6 +8,11 @@ register(
     id="Tiger-v0",
     # max_episode_steps = 400,
     entry_point="gym_pomdp.envs:TigerEnv"
+)
+register(
+    id="Pocman-v0",
+    # max_episode_steps = 400,
+    entry_point="gym_pomdp.envs:PocEnv"
 )
 register(
     id="Tag-v0",

@@ -55,10 +55,10 @@ grid = TagGrid((10, 5), obs_cells=29)
 class TagEnv(Env):
     metadata = {"render.modes": ["human", "ansi"]}
 
-    def __init__(self, board_size=(10, 5), num_opponents=4, obs_cells=29, static_param=.8):
+    def __init__(self, board_size=(10, 5), num_opponents=4, obs_cells=29, static_param=1.):
         self.num_opponents = num_opponents
         self.static_param = static_param
-        self._reward_range = 10 * self.num_opponents  # (-10 * self.num_opponents, 10 * self.num_opponents)
+        self._reward_range = 10 * self.num_opponents
         self._discount = .95
         self.action_space = Discrete(len(Moves))
         self.grid = TagGrid(board_size, obs_cells=obs_cells)
@@ -89,8 +89,6 @@ class TagEnv(Env):
                 if opp_pos == self.state.agent_pos:  # check if x==x_agent and y==y_agent
                     reward = 10.
                     tagged = True
-                    # print("tagged")
-                    # self.tag_state.num_alive -= 1
                     self.state.opponent_pos.pop(opp)
                 elif self.state.opponent_pos[opp].is_valid():
                     self.move_opponent(opp)
@@ -105,18 +103,17 @@ class TagEnv(Env):
 
         ob = self._sample_ob(self.state, action)
         p_ob = self._compute_prob(action, self.state, ob)
-        done = TagEnv._is_terminal(self.state)
+        done = len(self.state.opponent_pos) == 0
         return ob, reward, done, {"state": self.state, "p_ob": p_ob}
 
     def render(self, mode="human", close=False):
         if close:
             return
         if mode == "human":
-
             agent_pos = self.grid.get_index(self.state.agent_pos)
             obj_pos = [self.grid.get_index(opp) for opp in self.state.opponent_pos]
             if not hasattr(self, "gui"):
-                self.gui = TagGui(board_size=self.grid.get_size(), start_pos=agent_pos, obj_pos=obj_pos)
+                self.gui = TagGui(board_size=self.grid.get_size, start_pos=agent_pos, obj_pos=obj_pos)
             msg = "S: " + str(self.state) + " T: " + str(self.time) + " A: " + action_to_str(
                 self.last_action)
             self.gui.render(state=(agent_pos, obj_pos), msg=msg)
@@ -140,26 +137,10 @@ class TagEnv(Env):
             if self.grid.is_inside(opp_pos + move):
                 self.state.opponent_pos[opp] = opp_pos + move
 
-    @staticmethod
-    def _compute_prob(action, next_state, ob, correct_prob=.85):
-        p_ob = 0.0
+    def _compute_prob(self, action, next_state, ob, correct_prob=.85):
+        return int(ob == grid.get_index(next_state.agent_pos))
 
-        if action == 4 and ob == grid.n_tiles:
-            return 0
-        elif action == 4 and ob == grid.get_index(next_state.agent_pos):
-            return 1
-        elif action < 4 and ob == grid.n_tiles:
-            for opp_pos in next_state.opponent_pos:
-                if opp_pos == next_state.agent_pos:
-                    return 1
-        elif action < 4 and ob == grid.get_index(next_state.agent_pos):
-            return 1
-
-        assert p_ob >= 0.0 and p_ob <= 1.0
-        return 1. #p_ob
-
-    @staticmethod
-    def _sample_ob(state, action):
+    def _sample_ob(self, state, action):
         obs = grid.get_index(state.agent_pos)  # agent index
         if action < 4:
             for opp_pos in state.opponent_pos:
@@ -167,23 +148,6 @@ class TagEnv(Env):
                     obs = grid.n_tiles  # number of cells that can observe
 
         return obs
-
-    @staticmethod
-    def _is_terminal(state):
-        return len(state.opponent_pos) == 0
-
-    @staticmethod
-    def _compute_rw(tag_state, action):
-        reward = 0
-        if action == 4:
-            for opp, opp_pos in enumerate(tag_state.opponent_pos):
-                if opp_pos == tag_state.agent_pos:
-                    reward = 10
-                else:
-                    reward = -10
-        else:
-            reward = -1
-        return reward
 
     def _generate_legal(self):
         return list(range(self.action_space.n))
