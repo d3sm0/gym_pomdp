@@ -1,7 +1,9 @@
+from enum import Enum
+
+import numpy as np
 from gym import Env
 from gym.spaces import Discrete
-import numpy as np
-from enum import Enum
+
 from gym_pomdp.envs.coord import Coord, Grid, Moves
 from gym_pomdp.envs.gui import RockGui
 
@@ -11,15 +13,6 @@ class Obs(Enum):
     GOOD = 1
     BAD = -1
 
-
-# TODO For each env create a starter state method
-# TODO Separate grid from env
-# TODO move stuff in static method
-# TODO create encoding for states
-# TODO add generate legal for each env
-# TODO add prior construction to each env
-# TODO remove tile everywhere
-# TODO add methods required by the MCTS: generate_legal, reward, discount as property
 
 def action_to_str(action):
     if action == 0:
@@ -90,7 +83,7 @@ class RockEnv(Env):
         self._discount = .95
         self._reward_range = 20
 
-    def _step(self, action):
+    def step(self, action):
 
         assert self.action_space.contains(action)
         # assert not self.done
@@ -121,13 +114,12 @@ class RockEnv(Env):
                     reward -= 10
             else:
                 reward -= 100
-            # p_ob = self.state.rocks[rock].prob_valuable
         elif action > 4:
             rock = action - len(Moves)
             assert rock < self.num_rocks and rock >= 0
             obs = self._sample_ob(self.state.agent_pos, self.state.rocks[rock])
 
-            eff = RockEnv._sensor_correctnes(self.state.agent_pos, self.state.rocks[rock].pos)
+            eff = RockEnv._efficiency(self.state.agent_pos, self.state.rocks[rock].pos)
             self.state.rocks[rock].update_prob(ob=obs, eff=eff)
             # p_ob = self.state.rocks[rock].prob_valuable
 
@@ -137,11 +129,12 @@ class RockEnv(Env):
         # self.done = True if reward == -100 or not self.grid.is_inside(self.state.agent_pos) else False
         self.total_rw += reward
 
+        p_ob = self._compute_prob(action, ob = obs,  next_state=self.state)
         # self.done = not self.grid.is_inside(self.state.agent_pos) or all(
         #     rock.collected for rock in self.state.rocks)
         return obs, reward, self.done, {"state": self.state, "p_ob":p_ob}
 
-    def _render(self, mode='human', close=False):
+    def render(self, mode='human', close=False):
         if close:
             return
         if mode == "human":
@@ -154,7 +147,7 @@ class RockEnv(Env):
             agent_pos = self.grid.get_index(self.state.agent_pos)
             self.gui.render(agent_pos, msg=msg)
 
-    def _reset(self):
+    def reset(self):
         self.done = False
         self.t = 0
         self.total_rw = 0
@@ -169,22 +162,22 @@ class RockEnv(Env):
             self.grid[rock.pos] = idx
         self.state = state
 
-    def _close(self):
+    def close(self):
         self.render(close=True)
 
     def _compute_prob(self, action, next_state, ob):
-        # TODO This is still wrong i should check with someone else code
-        p_ob = 0
-        if action > 4 and ob == Obs.NULL.value:
-            return 0
-        elif action > 4:
-            hed = self._sensor_correctnes(next_state.agent_pos, next_state.rocks[action - len(Moves)])
-            if ob == Obs.GOOD.value and next_state.rocks[action-len(Moves)].valuable:
-                return hed
-            elif ob == Obs.BAD.value and next_state.rocks[action-len(Moves)].valuable:
-                return 1-hed
-        return p_ob
 
+        if action <= 4:
+            return int(ob == Obs.NULL.value)
+
+        if ob != Obs.GOOD.value and ob != Obs.BAD.value:
+            return 0
+
+        eff = self._efficiency(next_state.agent_pos, next_state.rocks[action - len(Moves)].pos)
+        if next_state.rocks[action-len(Moves)].valuable:
+            return eff
+        else:
+            return 1-eff
 
     def _compute_rw(self, state, action):
         reward = 0
@@ -248,7 +241,7 @@ class RockEnv(Env):
         return legal
 
     @staticmethod
-    def _sensor_correctnes(agent_pos, rock_pos, hed=20):
+    def _efficiency(agent_pos, rock_pos, hed=20):
         # TODO check me
         d = Grid.euclidean_distance(agent_pos, rock_pos)
         eff = (1 + pow(2, -d / hed)) * .5
@@ -268,7 +261,7 @@ class RockEnv(Env):
 
     @staticmethod
     def _sample_ob(agent_pos, rock, hed=20):
-        eff = RockEnv._sensor_correctnes(agent_pos, rock.pos, hed=hed)
+        eff = RockEnv._efficiency(agent_pos, rock.pos, hed=hed)
         if np.random.random() > eff:
             return Obs.GOOD.value if rock.valuable else Obs.BAD.value
         else:

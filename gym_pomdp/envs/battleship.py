@@ -1,7 +1,9 @@
 from enum import Enum
+
 import numpy as np
 from gym import Env
 from gym.spaces import Discrete
+
 from gym_pomdp.envs.coord import Grid, Coord
 from gym_pomdp.envs.gui import ShipGui
 
@@ -71,7 +73,7 @@ class BattleShipEnv(Env):
         self.total_remaining = max_len - 1
         self.max_len = max_len + 1
 
-    def _step(self, action):
+    def step(self, action):
 
         # assert self.done == False
         assert self.action_space.contains(action)
@@ -107,7 +109,10 @@ class BattleShipEnv(Env):
         self.reset()
         self.state = state
 
-    def _reset(self):
+    def close(self):
+        return
+
+    def reset(self):
         self.done = False
         self.tot_rw = 0
         self.t = 0
@@ -115,7 +120,7 @@ class BattleShipEnv(Env):
         self.state = self._get_init_state()
         return Obs.NULL.value
 
-    def _render(self, mode='human', close=False):
+    def render(self, mode='human', close=False):
         if close:
             return
         if mode == 'human':

@@ -1,7 +1,9 @@
-import gym
-from gym.spaces import Discrete
 from enum import Enum
+
+import gym
 import numpy as np
+from gym.spaces import Discrete
+
 from gym_pomdp.envs.gui import TigerGui
 
 
@@ -54,19 +56,19 @@ class TigerEnv(gym.Env):
         self._reward_range = 10
         self.seed(seed)
 
-    def _reset(self):
+    def reset(self):
         self.done = False
         self.t = 0
         self.state = self.state_space.sample()
         self.last_action = Action.LISTEN.value
         return Obs.NULL.value
 
-    def _seed(self, seed=1234):
+    def seed(self, seed=1234):
         # TODO check if all seed are equal
         np.random.seed(seed)
         return [seed]
 
-    def _step(self, action):
+    def step(self, action):
 
         assert self.action_space.contains(action)
         assert self.done is not True
@@ -82,7 +84,7 @@ class TigerEnv(gym.Env):
         p_ob = TigerEnv._compute_prob(action, self.state, ob)
         return ob, rw, False, {"state": self.state, "p_ob": p_ob}
 
-    def _render(self, mode='human', close=False):
+    def render(self, mode='human', close=False):
         if close:
             return
         if mode == "human":
@@ -96,7 +98,7 @@ class TigerEnv(gym.Env):
         else:
             raise NotImplementedError()
 
-    def _close(self):
+    def close(self):
         self._render(close=True)
 
     def _set_state(self, state):

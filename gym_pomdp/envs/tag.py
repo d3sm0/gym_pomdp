@@ -1,8 +1,9 @@
 import numpy as np
 from gym import Env
 from gym.spaces import Discrete
+
+from gym_pomdp.envs.coord import Coord, Moves, Grid
 from gym_pomdp.envs.gui import TagGui
-from gym_pomdp.envs.coord import Coord, Moves, Grid, Tile
 
 
 def action_to_str(action):
@@ -64,18 +65,18 @@ class TagEnv(Env):
         self.observation_space = Discrete(self.grid.n_tiles + 1)
         self.time = 0
 
-    def _reset(self):
+    def reset(self):
         self.done = False
         self.time = 0
         self.last_action = 4
         self.state = self._get_init_state()
         return self._sample_ob(state=self.state, action=0)  # get agent position
 
-    def _seed(self, seed=None):
+    def seed(self, seed=None):
         np.random.seed(seed)
         return [seed]
 
-    def _step(self, action):  # state
+    def step(self, action):  # state
         assert self.action_space.contains(action)  # action are idx of movements
         # assert self.done == False
 
@@ -107,7 +108,7 @@ class TagEnv(Env):
         done = TagEnv._is_terminal(self.state)
         return ob, reward, done, {"state": self.state, "p_ob": p_ob}
 
-    def _render(self, mode="human", close=False):
+    def render(self, mode="human", close=False):
         if close:
             return
         if mode == "human":
@@ -155,7 +156,7 @@ class TagEnv(Env):
             return 1
 
         assert p_ob >= 0.0 and p_ob <= 1.0
-        return p_ob
+        return 1. #p_ob
 
     @staticmethod
     def _sample_ob(state, action):

@@ -1,7 +1,8 @@
+from enum import Enum
+
+import numpy as np
 from gym.core import Env
 from gym.spaces import Discrete
-from enum import Enum
-import numpy as np
 
 
 class Obs(Enum):
@@ -13,7 +14,7 @@ class Obs(Enum):
 class NetworkEnv(Env):
     metadata = {"render.modes": ["ansi"]}
 
-    def __init__(self, n_machines=4, _type="ring"):
+    def __init__(self, n_machines=10, _type="ring"):
         self._p = .1  # failure prob
         self._q = 1 / 3
         self._n_machines = n_machines
@@ -24,16 +25,19 @@ class NetworkEnv(Env):
         self.neighbours = self.make_3legs_neighbours(
             self._n_machines) if _type == "ring" else self.make_ring_neighbours(n_machines)
 
-    def _sample_prob(self):
-        return .95
+    def _compute_prob(self, action, next_state, ob):
+        return self._p_ob
 
-    def _reset(self):
+    @property
+    def _p_ob(self):
+        return .95
+    def reset(self):
         self.done = False
         self.t = 0
         self.state = self._get_init_state()
         return 0
 
-    def _step(self, action):
+    def step(self, action):
 
         assert self.action_space.contains(action)
         reward = 0
@@ -65,22 +69,26 @@ class NetworkEnv(Env):
             if reboot:
                 reward -= 2.5
                 self.state[machine] = 1
-                ob = np.random.binomial(1, self._sample_prob())
+                ob = np.random.binomial(1, self._p_ob)
 
             else:
                 reward -= .1
-                if np.random.binomial(1, self._sample_prob()):
+                if np.random.binomial(1, self._p_ob):
                     ob = self.state[machine]
                 else:
                     ob = 1 - self.state[machine]
 
-        return ob, reward, self.done, {"state": self.state}
+        return ob, reward, self.done, {"state": self.state, "p_ob": .95}
 
-    def _render(self, mode="ansi", close=False):
+    def render(self, mode="ansi", close=False):
         if close:
             return
 
         print("Current machines {}".format(self.state), sep="\t")
+
+    def _set_state(self, state):
+        self.done = False
+        self.state = state
 
     def _get_init_state(self):
         return np.ones(self._n_machines, dtype=np.int32)
@@ -123,7 +131,7 @@ if __name__ == "__main__":
     for idx in range(100):
         action = env.action_space.sample()
         ob, rw, done, _ = env.step(action)
-        env.render(mode = "ansi")
+        env.render(mode="ansi")
         # print(ob)
         r += rw
 

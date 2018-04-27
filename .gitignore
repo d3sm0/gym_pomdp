@@ -6,3 +6,5 @@ gym_pomdp/envs/cake.py
 build
 dist
 gym_pomdp.egg-info
+*.m
+ignore
