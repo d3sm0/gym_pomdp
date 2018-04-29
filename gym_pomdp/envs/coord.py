@@ -1,6 +1,7 @@
-import numpy as np
-from enum import Enum
 from collections import namedtuple
+from enum import Enum
+
+import numpy as np
 
 
 class Coord(namedtuple("Coord", ["x", "y"])):
@@ -45,7 +46,7 @@ class Grid(object):
         try:
             return self.board[idx]
         except IndexError:
-            return None
+            raise IndexError()
 
     def build_board(self, value=0):
         self.board = []

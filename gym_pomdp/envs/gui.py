@@ -1,13 +1,11 @@
 import os
-import pygame
 from itertools import zip_longest
+
+import pygame
 from gym_pomdp.envs.coord import Coord, Tile
 
 PATH = os.path.split(__file__)[0]
-
-
-# TODO Check abs path
-# TODO Rotate grid
+FILE_PATH = os.path.join(PATH, 'assets')
 
 class GuiTile(Tile):
     _borderWidth = 2
@@ -112,8 +110,8 @@ class ShipGui(GridGui):
 class RockGui(GridGui):
     _tile_size = 50
     _assets = dict(
-        _ROBOT=os.path.abspath("assets/r2d2.png"),
-        _ROCK=os.path.abspath("assets/rock.png")
+        _ROBOT=os.path.join(FILE_PATH,"r2d2.png"),
+        _ROCK=os.path.join(FILE_PATH, "rock.png")
     )
 
     def __init__(self, board_size=(5, 5), start_pos=0, obj_pos=()):
@@ -149,12 +147,12 @@ class RockGui(GridGui):
 class TagGui(GridGui):
     _tile_size = 50
     _assets = dict(
-        _ROBOT=os.path.abspath("assets/r2d2.png"),
-        _STORM=os.path.abspath("assets/soldier.png"),
-        _RIGHT=os.path.abspath("assets/right.png"),
-        _LEFT=os.path.abspath("assets/left.png"),
-        _UP=os.path.abspath("assets/up.png"),
-        _DOWN=os.path.abspath("assets/down.png"),
+        _ROBOT=os.path.join(FILE_PATH,"r2d2.png"),
+        _STORM=os.path.join(FILE_PATH,"soldier.png"),
+        _RIGHT=os.path.join(FILE_PATH,"right.png"),
+        _LEFT=os.path.join(FILE_PATH,"left.png"),
+        _UP=os.path.join(FILE_PATH,"up.png"),
+        _DOWN=os.path.join(FILE_PATH,"down.png"),
 
     )
 

@@ -1,5 +1,6 @@
-import numpy as np
 from enum import Enum
+
+import numpy as np
 from gym import Env
 from gym.spaces import Discrete
 from gym_pomdp.envs.coord import Grid, Coord, Moves, Tile
@@ -122,12 +123,12 @@ class PocEnv(Env):
                 actions.append(action.value)
         return actions
 
-    def _step(self, action):
+    def step(self, action):
         assert self.action_space.contains(action)
-        assert self.done == False
+        assert self.done is False
 
         reward = -1
-        next_pos = self.next_pos(self.state.agent_pos, action)
+        next_pos = self._next_pos(self.state.agent_pos, action)
         if next_pos.is_valid():
             self.state.agent_pos = next_pos
         else:
@@ -147,12 +148,11 @@ class PocEnv(Env):
             if self.state.power_step > 0:
                 reward += 25
                 self.state.ghosts[hit_ghost].reset()
-
             else:
                 reward += - 100
                 self.done = True
 
-        ob = self.make_ob(action)
+        ob = self._make_ob(action)
 
         if self.state.food_pos[self.grid.get_index(self.state.agent_pos)]:
             if sum(self.state.food_pos) == 0:
@@ -163,12 +163,13 @@ class PocEnv(Env):
             reward += 10
         return ob, reward, self.done, {"state": self.state, "p_ob": self._compute_prob(action, self.state, ob)}
 
-    def make_ob(self, action):
+    def _make_ob(self, action):
+        # TODO fix me
         ob = 0
         for d in range(self.action_space.n):
             if self._see_ghost(action) > 0:
                 ob = set_flags(ob, d)
-            next_pos = self.next_pos(self.state.agent_pos, direction=d)
+            next_pos = self._next_pos(self.state.agent_pos, direction=d)
             if next_pos.is_valid() and is_passable(next_pos):
                 ob = set_flags(ob, d + self.action_space.n)
         if self._smell_food():
@@ -178,7 +179,7 @@ class PocEnv(Env):
         return ob
 
     def _compute_prob(self, action, next_state, ob):
-        return int(ob == self.make_ob(action))
+        return int(ob == self._make_ob(action))
 
     def _see_ghost(self, action):
         eye_pos = self.state.agent_pos + Moves.get_coord(action)
@@ -207,16 +208,16 @@ class PocEnv(Env):
                 return True
         return False
 
-    def _render(self, mode='human', close=False):
+    def render(self, mode='human', close=False):
         pass
 
-    def _reset(self):
+    def reset(self):
         self.t = 0
         self.done = False
         self._get_init_state(config)
         return 0
 
-    def _close(self):
+    def close(self):
         pass
 
     def _get_init_state(self, config=config):
@@ -229,16 +230,13 @@ class PocEnv(Env):
         self.state.agent_pos = Coord(*config["_poc_home"])
         for g in range(config["_num_ghosts"]):
             pos = Coord(config['_ghost_home'][0] + g % 2, config['_ghost_home'][1] + g // 2)
-            # pos = Coord(*config["_ghost_home"])
-            # pos.x += g % 2
-            # pos.y += g // 2
             self.state.ghosts.append(Ghost(pos, direction=-1))
 
         self.state.food_pos = np.random.binomial(1, config["_food_prob"], size=self.grid.n_tiles + 1)
         self.state.power_step = 0
         return self.state
 
-    def next_pos(self, pos, direction, passage_y=config["_passage_y"]):
+    def _next_pos(self, pos, direction, passage_y=config["_passage_y"]):
         direction = Moves.get_coord(direction)
         if pos.x == 0 and pos.y == passage_y and direction == Moves.RIGHT:
             next_pos = Coord(self.grid.x_size - 1, pos.y)
@@ -270,7 +268,7 @@ class PocEnv(Env):
         best_dir = -1
         for d in range(self.action_space.n):
             dist = Grid.directional_distance(self.state.agent_pos, self.state.ghosts[g].pos, d)
-            new_pos = self.next_pos(self.state.ghosts[g].pos, d)
+            new_pos = self._next_pos(self.state.ghosts[g].pos, d)
             if dist <= best_dist and new_pos.is_valid() and can_move(self.state.ghosts[g], d):
                 best_pos = new_pos
                 best_dist = dist
@@ -287,7 +285,7 @@ class PocEnv(Env):
         best_dir = -1
         for d in range(self.action_space.n):
             dist = Grid.directional_distance(self.state.agent_pos, self.state.ghosts[g].pos, d)
-            new_pos = self.next_pos(self.state.ghosts[g].pos, d)
+            new_pos = self._next_pos(self.state.ghosts[g].pos, d)
             if dist >= best_dist and new_pos.is_valid() and can_move(self.state.ghosts[g], d):
                 best_pos = new_pos
                 best_dist = dist
@@ -301,7 +299,7 @@ class PocEnv(Env):
         ghost_pos = self.state.ghosts[g].pos
         while True:
             d = self.action_space.sample()
-            next_pos = self.next_pos(ghost_pos, d)
+            next_pos = self._next_pos(ghost_pos, d)
             if next_pos.is_valid() and can_move(self.state.ghosts[g], d):
                 break
 

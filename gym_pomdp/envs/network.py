@@ -51,10 +51,11 @@ class NetworkEnv(Env):
                     n_failures[i] = 1
 
         for idx in range(self._n_machines):
-            if not n_failures[idx]:
-                self.state[idx] = 1 - np.random.binomial(1, p=self._p)
-            else:
-                self.state[idx] = 1 - np.random.binomial(1, p=self._q)
+            if self.state[idx]:
+                if not n_failures[idx]:
+                    self.state[idx] = 1 - np.random.binomial(1, p=self._p)
+                else:
+                    self.state[idx] = 1 - np.random.binomial(1, p=self._q)
 
         for idx in range(self._n_machines):
             if self.state[idx]:
@@ -122,16 +123,12 @@ class NetworkEnv(Env):
 
 if __name__ == "__main__":
 
-    env = NetworkEnv(n_machines=16)
+    env = NetworkEnv(n_machines=19)
     env.reset()
     r = 0
     for idx in range(60):
-        # action = env.action_space.sample()
-        action = 2 * 16
+        action = env.action_space.sample()
         ob, rw, done, _ = env.step(action)
         env.render(mode="ansi")
-        # print(ob)
         r += rw
-    print(r/16)
-
-    # print(rw)
+    print(r)
