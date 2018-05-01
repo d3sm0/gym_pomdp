@@ -92,9 +92,16 @@ class RockEnv(Env):
 
     def __init__(self, board_size=7, num_rocks=8):
 
-        self.num_rocks = num_rocks
+        self.use_problem_id = False
+        if board_size in config.keys() and num_rocks == config[board_size]['size'][1]:
+            self.use_problem_id = board_size
+            self.board_size = board_size
+            self.num_rocks = config[board_size]['size'][1]
+        else:
+            self.board_size = board_size
+            self.num_rocks = num_rocks
         self.grid = RockGrid(board_size=(board_size, board_size))
-        self.action_space = Discrete(len(Action) + num_rocks)
+        self.action_space = Discrete(len(Action) + self.num_rocks)
         self.observation_space = Discrete(len(Obs))
         self._discount = .95
         self._reward_range = 20
@@ -107,6 +114,7 @@ class RockEnv(Env):
         reward = 0
         ob = Obs.NULL.value
         assert self.action_space.contains(action)
+        assert self.done is False
         if action < Action.SAMPLE.value:
             if action == Action.RIGHT.value:
                 if self.state.agent_pos.x + 1 < self.grid.x_size:
@@ -114,7 +122,7 @@ class RockEnv(Env):
                 else:
                     reward = 10
                     self.done = True
-                    return ob, reward, self.done, {"state": self.state, "p_ob": 0}
+                    return ob, reward,self.done,{"state": self._encode_state(self.state)}
             elif action == Action.UP.value:
                 if self.state.agent_pos.y + 1 < self.grid.y_size:
                     self.state.agent_pos += Moves.UP.value
@@ -165,9 +173,9 @@ class RockEnv(Env):
             # denom = (.5 * self.state.rocks[rock].lkv) + (.5 * self.state.rocks[rock].lkw)
             # self.state.rocks[rock].prob_valuable = (.5 * self.state.rocks[rock].lkv) / denom
 
-        p_ob = self._compute_prob(action, ob=ob, next_state=self.state)
+        # p_ob = self._compute_prob(action, ob=ob, next_state=self.state)
         self.done = self._penalization == reward
-        return ob, reward, self.done, {"state": self._encode_state(self.state), "p_ob": p_ob}
+        return ob, reward, self.done, {"state": self._encode_state(self.state)}
 
     def _decode_state(self, state):
 
@@ -175,7 +183,7 @@ class RockEnv(Env):
         board = state[1:-self.num_rocks].reshape(self.grid.get_size)
         rock_status = state[-self.num_rocks:]
         rock_state = RockState(agent_pos)
-        #assert board[board != -1].shape[0] == rock_status.shape[0]
+        # assert board[board != -1].shape[0] == rock_status.shape[0]
         # true_pos = [self.grid.get_index(rock.pos) for rock in self.state.rocks]
         # true_status = [rock.status for rock in self.state.rocks]
         # _, pos_list = list(zip(*sorted(zip(board[board != -1], np.where(board.T.flatten() != -1)[0]))))
@@ -200,7 +208,7 @@ class RockEnv(Env):
             rocks[idx] = rock.status
 
         # assert np.all(rocks == [rock.status for rock in self.state.rocks])
-        #assert len(grid[grid != -1]) == len(rocks)
+        # assert len(grid[grid != -1]) == len(rocks)
         return np.concatenate([agent_idx, grid, rocks])
 
     def render(self, mode='human', close=False):
@@ -239,6 +247,8 @@ class RockEnv(Env):
 
     def _compute_prob(self, action, next_state, ob):
 
+        next_state, _ = self._decode_state(next_state)
+
         if action <= Action.SAMPLE.value:
             return int(ob == Obs.NULL.value)
 
@@ -254,23 +264,27 @@ class RockEnv(Env):
     def _get_init_state(self, should_encode=True):
 
         self.grid.build_board(value=-1)
-        if self.grid.x_size in (2, 7, 11, 15):
+
+        if self.use_problem_id:
             init_state = Coord(*config[self.grid.x_size]["init_pos"])
             rock_pos = config[self.grid.x_size]["rock_pos"]
         else:
-            init_state = Coord(0, self.grid.y_size // 2)
+            init_state = self.grid.sample()
             rock_pos = []
         rock_state = RockState(init_state)
-        for idx in range(self.num_rocks):
-            if len(rock_pos) == 0:
+        if self.use_problem_id:
+            for idx in range(self.num_rocks):
+                pos = Coord(*rock_pos[idx])
+                rock_state.rocks.append(Rock(pos))
+                self.grid[pos] = idx
+        else:
+            for idx in range(self.num_rocks):
                 while True:
                     pos = self.grid.sample()
                     if self.grid.board[pos] == -1:
                         break
-            else:
-                pos = Coord(*rock_pos[idx])
-            rock_state.rocks.append(Rock(pos))
-            self.grid[pos] = idx
+                rock_state.rocks.append(Rock(pos))
+                self.grid[pos] = idx
 
         return self._encode_state(rock_state) if should_encode else rock_state
 
@@ -345,19 +359,20 @@ def int_to_one_hot(idx, size):
 
 
 if __name__ == "__main__":
-    env = RockEnv()
-    ob = env.reset()
-    done = False
-    t = 0
-    env.render()
-    for i in range(400):
-        action = env.action_space.sample()
-        ob, rw, done, info = env.step(action)
-        env._set_state(info["state"])
-        env._generate_legal()
+    env = RockEnv(board_size=7, num_rocks=8)
+    for idx in range(10000):
+        ob = env.reset()
+        done = False
+        t = 0
         env.render()
-        t += 1
-        if done:
-            break
+        for i in range(400):
+            action = np.random.choice(env._generate_legal(), 1)[0]
+            ob, rw, done, info = env.step(action)
+            env._set_state(info["state"])
+            env._generate_legal()
+            env.render()
+            t += 1
+            if done:
+                break
 
-    print("rw {}, t{}".format(rw, t))
+        print("rw {}, t{}".format(rw, t))

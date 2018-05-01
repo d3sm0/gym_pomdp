@@ -3,7 +3,6 @@ from gym import Env
 from gym.spaces import Discrete
 
 from gym_pomdp.envs.coord import Coord, Moves, Grid
-from gym_pomdp.envs.gui import TagGui
 
 
 def action_to_str(action):
@@ -16,7 +15,7 @@ def action_to_str(action):
     elif action == 3:
         return "left"
     elif action == 4:
-        return "stay"
+        return "tag"
     else:
         raise NotImplementedError()
 
@@ -24,8 +23,19 @@ def action_to_str(action):
 class TagGrid(Grid):
     def __init__(self, board_size, obs_cells=29):
         super().__init__(*board_size)
-        self.build_board(0)
+        # self.build_board(0)
         self.n_tiles = obs_cells
+        self.build_board()
+
+    def sample(self):
+        return self.get_tag_coord(np.random.randint(self.n_tiles))
+
+    def build_board(self, value=-1):
+        pass
+        # self.board = np.zeros((self.x_size, self.y_size), dtype=np.int32) - 1
+        # for idx in range(self.n_tiles):
+        #     self.board[self.get_tag_coord(idx)] = idx
+        # self.board = self.board.T
 
     def is_inside(self, coord):
         # return coord.is_valid() and coord.x < self.x_size and coord.y < self.y_size
@@ -34,11 +44,11 @@ class TagGrid(Grid):
         else:
             return coord.x >= 0 and coord.x < 10 and coord.y >= 0
 
-    def get_coord(self, idx):
-        if idx == -1:
-            return Coord(-1, -1)
+    def get_tag_coord(self, idx):
+        # if idx == -1:
+        #     return Coord(-1, -1)
         # return Coord(idx % self.x_size, idx // self.x_size)
-        # assert index >= 0 and index < self.n_tiles
+        assert idx >= 0 and idx < self.n_tiles
         if idx < 20:
             return Coord(idx % 10, idx // 10)
         # if idx == -1:
@@ -47,24 +57,26 @@ class TagGrid(Grid):
         return Coord(idx % 3 + 5, idx // 3 + 2)
 
     def get_index(self, coord):
-        if coord.y == -1:
-            return -1
         # return self.x_size * coord.y + coord.x
         # assert coord.x >= 0 and coord.x < 10
         # assert coord.y >= 0 and coord.y < 5
         if coord.y < 2:
             return coord.y * 10 + coord.x
         # assert coord.x >= 5 and coord.x < 8
-        return 20 + (coord.y - 2 * 3) + coord.x - 5
+        return 20 + (coord.y - 2) * 3 + coord.x - 5
+
+    @property
+    def get_available_coord(self):
+        return [self.get_tag_coord(idx) for idx in range(self.n_tiles)]
 
 
-grid = TagGrid((10, 5), obs_cells=29)
+# grid = TagGrid((10, 5), obs_cells=29)
 
 
 class TagEnv(Env):
     metadata = {"render.modes": ["human", "ansi"]}
 
-    def __init__(self, board_size=(10, 5), num_opponents=4, obs_cells=29, move_prob=.8):
+    def __init__(self, num_opponents=1, move_prob=.8, obs_cells=29, board_size=(10, 5)):
         self.num_opponents = num_opponents
         self.move_prob = move_prob
         self._reward_range = 10 * self.num_opponents
@@ -87,6 +99,7 @@ class TagEnv(Env):
 
     def step(self, action):  # state
         assert self.action_space.contains(action)  # action are idx of movements
+        assert self.done is False
         # assert self.done == False
 
         reward = 0.
@@ -98,7 +111,7 @@ class TagEnv(Env):
                 if opp_pos == self.state.agent_pos:  # check if x==x_agent and y==y_agent
                     reward = 10.
                     tagged = True
-                    self.state.opponent_pos[opp] = Coord(-1, -1)
+                    self.state.opponent_pos[opp] = Coord(4, 4)
                     self.state.num_opp -= 1
                     # self.state.opponent_pos.pop(opp)
                 elif self.state.opponent_pos[opp].is_valid():
@@ -113,38 +126,39 @@ class TagEnv(Env):
                 self.state.agent_pos = next_pos
 
         ob = self._sample_ob(self.state, action)
-        p_ob = self._compute_prob(action, self.state, ob)
-        done = self.state.num_opp == 0
-        return ob, reward, done, {"state": self._encode_state(self.state), "p_ob": p_ob}
+        # p_ob = self._compute_prob(action, self.state, ob)
+        self.done = self.state.num_opp == 0
+        return ob, reward, self.done, {"state": self._encode_state(self.state)}
 
     def render(self, mode="human", close=False):
-        if close:
-            return
-        if mode == "human":
-            agent_pos = self.grid.get_index(self.state.agent_pos)
-            obj_pos = [self.grid.get_index(opp) for opp in self.state.opponent_pos]
-            if not hasattr(self, "gui"):
-                self.gui = TagGui(board_size=self.grid.get_size, start_pos=agent_pos, obj_pos=obj_pos)
-            msg = "S: " + str(self.state) + " T: " + str(self.time) + " A: " + action_to_str(
-                self.last_action)
-            self.gui.render(state=(agent_pos, obj_pos), msg=msg)
+        return
+        # if close:
+        #     return
+        # if mode == "human":
+        #     # agent_pos = self.grid.get_index(self.state.agent_pos)
+        #     # obj_pos = [self.grid.get_index(opp) for opp in self.state.opponent_pos]
+        #     if not hasattr(self, "gui"):
+        #         self.gui = TagGui(board_size=self.grid.get_size, start_pos=self.state.agent_pos, obj_pos=self.state.opponent_pos)
+        #     msg = "S: " + str(self.state) + " T: " + str(self.time) + " A: " + action_to_str(
+        #         self.last_action)
+        #     self.gui.render(state=(self.state.agent_pos, self.state.opponent_pos), msg=msg)
 
     def _encode_state(self, state):
         s = np.zeros(self.num_opponents + 1, dtype=np.int32) - 1
-        s[0] = grid.get_index(state.agent_pos)
+        s[0] = self.grid.get_index(state.agent_pos)
         for idx, opp in zip(range(1, len(s)), state.opponent_pos):
-            opp_idx = grid.get_index(opp)
+            opp_idx = self.grid.get_index(opp)
             s[idx] = opp_idx
 
         return s
 
     def _decode_state(self, state):
         agent_idx = state[0]
-        tag_state = TagState(grid.get_coord(agent_idx))
+        tag_state = TagState(self.grid.get_coord(agent_idx))
         for opp_idx in state[1:]:
             if opp_idx > -1:
                 tag_state.num_opp += 1
-            opp_pos = grid.get_coord(opp_idx)
+            opp_pos = self.grid.get_coord(opp_idx)
             tag_state.opponent_pos.append(opp_pos)
 
             # true_pos = [grid.get_index(pos) for pos in env.state.opponent_pos]
@@ -176,15 +190,21 @@ class TagEnv(Env):
                 self.state.opponent_pos[opp] = opp_pos + move
 
     def _compute_prob(self, action, next_state, ob, correct_prob=.85):
-        return int(ob == grid.get_index(next_state.agent_pos))
+        next_state = self._decode_state(next_state)
+
+        if ob == self.grid.n_tiles:
+            for opp_pos in next_state.opponent_pos:
+                if opp_pos == next_state.agent_pos:
+                    return 1
+            return 0
+
+        return int(ob == self.grid.get_index(next_state.agent_pos))
 
     def _sample_ob(self, state, action):
-        obs = grid.get_index(state.agent_pos)  # agent index
-        if action < 4:
-            for opp_pos in state.opponent_pos:
-                if opp_pos == state.agent_pos:
-                    obs = grid.n_tiles  # number of cells that can observe
-        assert 0 <= obs <= 30
+        obs = self.grid.get_index(state.agent_pos)  # agent index
+        for opp_pos in state.opponent_pos:
+            if opp_pos == state.agent_pos:
+                obs = self.grid.n_tiles  # 29 observation
         return obs
 
     def _generate_legal(self):
@@ -254,7 +274,7 @@ if __name__ == '__main__':
     while not done:
         action = Moves.sample()
         ob1, rw, done, info = env.step(action)
-        env._set_state(info['state'])
+        # env._set_state(info['state'])
         env.render()
         r += rw
     print('done, r {}'.format(r))

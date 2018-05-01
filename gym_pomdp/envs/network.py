@@ -14,7 +14,7 @@ class Obs(Enum):
 class NetworkEnv(Env):
     metadata = {"render.modes": ["ansi"]}
 
-    def __init__(self, n_machines=10, _type=3):
+    def __init__(self, n_machines=10, problem_type=3):
         self._p = .1  # failure prob
         self._q = 1 / 3
         self._n_machines = n_machines
@@ -23,7 +23,7 @@ class NetworkEnv(Env):
         self._discount = .95
         self._reward_range = n_machines * 2
         self.neighbours = self.make_3legs_neighbours(
-            self._n_machines) if _type == 3 else self.make_ring_neighbours(n_machines)
+            self._n_machines) if problem_type == 3 else self.make_ring_neighbours(n_machines)
 
     def _compute_prob(self, action, next_state, ob):
         return self._p_ob
@@ -35,12 +35,14 @@ class NetworkEnv(Env):
     def reset(self):
         self.done = False
         self.t = 0
-        self.state = self._get_init_state()
+        # self.state = self._get_init_state()
+        self.state = np.ones(self._n_machines, dtype=np.int8)
         return Obs.OFF.value
 
     def step(self, action):
 
         assert self.action_space.contains(action)
+        assert self.done is False
         reward = 0
         ob = Obs.NULL.value
         n_failures = np.zeros(self._n_machines, dtype=np.int32)
@@ -89,7 +91,8 @@ class NetworkEnv(Env):
         self.state = state
 
     def _get_init_state(self):
-        return np.ones(self._n_machines, dtype=np.int32)
+        return np.ones(self._n_machines, dtype=np.int8)
+        # return np.random.binomial(n=1,size=self._n_machines, p=.5)
 
     def _generate_legal(self):
         return list(range(self.action_space.n))

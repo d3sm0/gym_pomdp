@@ -70,18 +70,19 @@ class TigerEnv(gym.Env):
     def step(self, action):
 
         assert self.action_space.contains(action)
-        assert self.done is not True
+        assert self.done is False
         self.t += 1
         self.last_action = action
 
         rw = TigerEnv._compute_rw(self.state, action)
         if TigerEnv._is_terminal(self.state, action):
-            return self.state, rw, True, dict(state=self.state, p_ob=1.)
+            self.done = True
+            return self.state, rw, self.done, {'state':self.state}
 
         self._sample_state(action)
         ob = TigerEnv._sample_ob(action, self.state)
-        p_ob = TigerEnv._compute_prob(action, self.state, ob)
-        return ob, rw, False, {"state": self.state, "p_ob": p_ob}
+        self.done = False
+        return ob, rw, self.done, {"state": self.state}
 
     def render(self, mode='human', close=False):
         if close:
