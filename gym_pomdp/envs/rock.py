@@ -3,6 +3,7 @@ from enum import Enum
 import numpy as np
 from gym import Env
 from gym.spaces import Discrete
+
 from gym_pomdp.envs.coord import Coord, Grid, Moves
 from gym_pomdp.envs.gui import RockGui
 
@@ -87,12 +88,15 @@ class RockState(object):
         # self.target = Coord(-1, -1)
 
 
+# remove illegal termination
+# add a stochastic version of rock sampling
 class RockEnv(Env):
     metadata = {"render.modes": ["human", "ansi"]}
 
-    def __init__(self, board_size=7, num_rocks=8):
+    def __init__(self, board_size=7, num_rocks=8, p_move=0):
 
         self.use_problem_id = False
+        self.p_move = p_move
         if board_size in config.keys() and num_rocks == config[board_size]['size'][1]:
             self.use_problem_id = board_size
             self.board_size = board_size
@@ -105,7 +109,7 @@ class RockEnv(Env):
         self.observation_space = Discrete(len(Obs))
         self._discount = .95
         self._reward_range = 20
-        self._penalization = -100
+        self._penalization = -10
 
     def step(self, action):
 
@@ -115,14 +119,14 @@ class RockEnv(Env):
         ob = Obs.NULL.value
         assert self.action_space.contains(action)
         assert self.done is False
-        if action < Action.SAMPLE.value:
+        if action < Action.SAMPLE.value and self.p_move > 0 and np.random.binomial(1, p=self.p_move):
             if action == Action.RIGHT.value:
                 if self.state.agent_pos.x + 1 < self.grid.x_size:
                     self.state.agent_pos += Moves.RIGHT.value
                 else:
                     reward = 10
                     self.done = True
-                    return ob, reward,self.done,{"state": self._encode_state(self.state)}
+                    return ob, reward, self.done, {"state": self._encode_state(self.state)}
             elif action == Action.UP.value:
                 if self.state.agent_pos.y + 1 < self.grid.y_size:
                     self.state.agent_pos += Moves.UP.value
@@ -174,7 +178,7 @@ class RockEnv(Env):
             # self.state.rocks[rock].prob_valuable = (.5 * self.state.rocks[rock].lkv) / denom
 
         # p_ob = self._compute_prob(action, ob=ob, next_state=self.state)
-        self.done = self._penalization == reward
+        self.done = all([rock.status == 0 for rock in self.state.rocks])  # self._penalization == reward
         return ob, reward, self.done, {"state": self._encode_state(self.state)}
 
     def _decode_state(self, state):

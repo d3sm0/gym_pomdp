@@ -189,7 +189,7 @@ class TagEnv(Env):
             if self.grid.is_inside(opp_pos + move):
                 self.state.opponent_pos[opp] = opp_pos + move
 
-    def _compute_prob(self, action, next_state, ob, correct_prob=.85):
+    def _compute_prob(self, action, next_state, ob):
         next_state = self._decode_state(next_state)
 
         if ob == self.grid.n_tiles:
