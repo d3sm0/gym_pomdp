@@ -17,6 +17,7 @@ class NetworkEnv(Env):
     def __init__(self, n_machines=10, problem_type=3):
         self._p = .1  # failure prob
         self._q = 1 / 3
+        self._query = 0
         self._n_machines = n_machines
         self.action_space = Discrete(n_machines * 2 + 1)
         self.observation_space = Discrete(len(Obs))
@@ -35,6 +36,7 @@ class NetworkEnv(Env):
     def reset(self):
         self.done = False
         self.t = 0
+        self._query = 0
         # self.state = self._get_init_state()
         self.state = np.ones(self._n_machines, dtype=np.int8)
         return Obs.OFF.value
@@ -44,6 +46,7 @@ class NetworkEnv(Env):
         assert self.action_space.contains(action)
         assert self.done is False
         reward = 0
+        self._query += 1
         ob = Obs.NULL.value
         n_failures = np.zeros(self._n_machines, dtype=np.int32)
 
@@ -126,12 +129,20 @@ class NetworkEnv(Env):
 
 if __name__ == "__main__":
 
-    env = NetworkEnv(n_machines=19)
-    env.reset()
-    r = 0
-    for idx in range(60):
-        action = env.action_space.sample()
-        ob, rw, done, _ = env.step(action)
-        env.render(mode="ansi")
-        r += rw
-    print(r)
+    env = NetworkEnv(n_machines=16, problem_type=3)
+    eps = []
+    seed = 0
+    env.seed(seed)
+    for ep in range(500):
+        env.reset()
+        r = 0
+        discount = 1
+        for idx in range(100):
+            action = 2  # env.action_space.sample()
+            ob, rw, done, _ = env.step(action)
+            # env.render(mode="ansi")
+            # r+= rw
+            r += discount * rw
+            discount *= .95
+        eps.append(r)
+    print(sum(eps) / 500)

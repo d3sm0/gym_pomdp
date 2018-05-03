@@ -3,6 +3,7 @@ from enum import Enum
 import gym
 import numpy as np
 from gym.spaces import Discrete
+
 from gym_pomdp.envs.gui import TigerGui
 
 
@@ -53,11 +54,13 @@ class TigerEnv(gym.Env):
         self.observation_space = Discrete(len(Obs))
         self._discount = .95
         self._reward_range = 10
+        self._query = 0
         self.seed(seed)
 
     def reset(self):
         self.done = False
         self.t = 0
+        self._query = 0
         self.state = self.state_space.sample()
         self.last_action = Action.LISTEN.value
         return Obs.NULL.value
@@ -72,6 +75,7 @@ class TigerEnv(gym.Env):
         assert self.action_space.contains(action)
         assert self.done is False
         self.t += 1
+        self._query+=1
         self.last_action = action
 
         rw = TigerEnv._compute_rw(self.state, action)
