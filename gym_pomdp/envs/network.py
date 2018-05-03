@@ -27,7 +27,18 @@ class NetworkEnv(Env):
             self._n_machines) if problem_type == 3 else self.make_ring_neighbours(n_machines)
 
     def _compute_prob(self, action, next_state, ob):
-        return self._p_ob
+
+        if action < self._n_machines * 2:
+            machine, reboot = divmod(action, 2)
+            if next_state[machine] == ob:
+                return self._p_ob
+            else:
+                return 1 - self._p_ob
+        else:
+            if ob == Obs.NULL.value:
+                return 1.
+        # this should never happen
+        return 0
 
     @property
     def _p_ob(self):
@@ -48,7 +59,7 @@ class NetworkEnv(Env):
         reward = 0
         self._query += 1
         ob = Obs.NULL.value
-        n_failures = np.zeros(self._n_machines, dtype=np.int32)
+        n_failures = np.zeros(self._n_machines, dtype=np.int8)
 
         for i in range(self._n_machines):
             for j in range(len(self.neighbours[i])):
@@ -63,12 +74,14 @@ class NetworkEnv(Env):
                     self.state[idx] = 1 - np.random.binomial(1, p=self._q)
 
         for idx in range(self._n_machines):
-            if self.state[idx]:
+            if self.state[idx] == 1:
                 if len(self.neighbours[idx]) > 2:
                     reward += 2
                 else:
                     reward += 1
         if action < self._n_machines * 2:
+            # machine = action // 2
+            # reboot = action % 2
             machine, reboot = divmod(action, 2)
             if reboot:
                 reward -= 2.5
@@ -81,7 +94,7 @@ class NetworkEnv(Env):
                 else:
                     ob = 1 - self.state[machine]
 
-        return ob, reward, self.done, {"state": self.state, "p_ob": self._p_ob}
+        return ob, reward, self.done, {"state": self.state}
 
     def render(self, mode="ansi", close=False):
         if close:
@@ -133,13 +146,15 @@ if __name__ == "__main__":
     eps = []
     seed = 0
     env.seed(seed)
+    avg = np.zeros((500,100))
     for ep in range(500):
         env.reset()
         r = 0
         discount = 1
         for idx in range(100):
             action = 2  # env.action_space.sample()
-            ob, rw, done, _ = env.step(action)
+            ob, rw, done, info = env.step(action)
+            avg[ep, idx] = info['state'].mean()
             # env.render(mode="ansi")
             # r+= rw
             r += discount * rw
