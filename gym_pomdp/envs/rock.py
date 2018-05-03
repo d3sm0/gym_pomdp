@@ -71,6 +71,7 @@ class Rock(object):
     def __init__(self, pos):
         # self.valuable = np.random.binomial(1, p=.5)
         self.status = int(np.sign(np.random.uniform(0, 1) - .5))
+        # self.status = 1
         # self.collected = False
         self.pos = pos
         # self.count = 0
@@ -121,7 +122,7 @@ class RockEnv(Env):
         ob = Obs.NULL.value
         assert self.action_space.contains(action)
         assert self.done is False
-        if action < Action.SAMPLE.value and self.p_move > 0 and np.random.binomial(1, p=self.p_move):
+        if action < Action.SAMPLE.value: #and self.p_move > 0 and np.random.binomial(1, p=self.p_move):
             if action == Action.RIGHT.value:
                 if self.state.agent_pos.x + 1 < self.grid.x_size:
                     self.state.agent_pos += Moves.RIGHT.value
@@ -367,7 +368,7 @@ def int_to_one_hot(idx, size):
 
 
 if __name__ == "__main__":
-    env = RockEnv(board_size=7, num_rocks=8)
+    env = RockEnv(board_size=2, num_rocks=1)
     for idx in range(10000):
         ob = env.reset()
         done = False
