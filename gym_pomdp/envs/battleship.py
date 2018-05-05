@@ -3,7 +3,6 @@ from enum import Enum
 import numpy as np
 from gym import Env
 from gym.spaces import Discrete
-
 from gym_pomdp.envs.coord import Grid, Coord
 from gym_pomdp.envs.gui import ShipGui
 
@@ -72,6 +71,18 @@ class BattleShipEnv(Env):
         self._discount = 1.
         self.total_remaining = max_len - 1
         self.max_len = max_len + 1
+
+    def _compute_prob(self, action, next_state, ob):
+
+        action_pos = self.grid.get_coord(action)
+        cell = self.grid[action_pos]
+        if ob == Obs.NULL.value and cell.visited:
+            return 1
+        elif ob == Obs.HIT.value and cell.occupied:
+            return 1
+        else:
+            return int(ob == Obs.NULL.value)
+
 
     def step(self, action):
 

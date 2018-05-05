@@ -3,7 +3,6 @@ from enum import Enum
 import numpy as np
 from gym import Env
 from gym.spaces import Discrete
-
 from gym_pomdp.envs.coord import Coord, Grid, Moves
 from gym_pomdp.envs.gui import RockGui
 
@@ -74,11 +73,11 @@ class Rock(object):
         # self.status = 1
         # self.collected = False
         self.pos = pos
-        # self.count = 0
-        # self.measured = 0
-        # self.lkw = 1.  # likely worthless
-        # self.lkv = 1.  # likely valuable
-        # self.prob_valuable = .5
+        self.count = 0
+        self.measured = 0
+        self.lkw = 1.  # likely worthless
+        self.lkv = 1.  # likely valuable
+        self.prob_valuable = .5
 
 
 class RockState(object):
@@ -86,7 +85,7 @@ class RockState(object):
         self.agent_pos = pos
         self.rocks = []
         # self.n_rocks = 0
-        # self.target = Coord(-1, -1)
+        self.target = -1  # Coord(-1,-1) # -1  # Coord(-1, -1)
 
 
 # remove illegal termination
@@ -122,7 +121,7 @@ class RockEnv(Env):
         ob = Obs.NULL.value
         assert self.action_space.contains(action)
         assert self.done is False
-        if action < Action.SAMPLE.value: #and self.p_move > 0 and np.random.binomial(1, p=self.p_move):
+        if action < Action.SAMPLE.value:  # and self.p_move > 0 and np.random.binomial(1, p=self.p_move):
             if action == Action.RIGHT.value:
                 if self.state.agent_pos.x + 1 < self.grid.x_size:
                     self.state.agent_pos += Moves.RIGHT.value
@@ -164,10 +163,11 @@ class RockEnv(Env):
             assert rock < self.num_rocks
 
             ob = self._sample_ob(self.state.agent_pos, self.state.rocks[rock])
+
             # self.state.rocks[rock].measured += 1
-
+            #
             # eff = self._efficiency(self.state.agent_pos, self.state.rocks[rock].pos)
-
+            #
             # if ob == Obs.GOOD.value:
             #     self.state.rocks[rock].count += 1
             #     self.state.rocks[rock].lkv *= eff
@@ -180,7 +180,9 @@ class RockEnv(Env):
             # denom = (.5 * self.state.rocks[rock].lkv) + (.5 * self.state.rocks[rock].lkw)
             # self.state.rocks[rock].prob_valuable = (.5 * self.state.rocks[rock].lkv) / denom
 
-        # p_ob = self._compute_prob(action, ob=ob, next_state=self.state)
+        # if self.state.target < 0 or self.state.agent_pos == self.state.rocks[self.state.target]:
+        #     self.state.target = self._select_target(self.state, self.grid.x_size)
+
         # self.done = all([rock.status == 0 for rock in self.state.rocks])  # self._penalization == reward
         self.done = self._penalization == reward
         return ob, reward, self.done, {"state": self._encode_state(self.state)}
@@ -261,11 +263,11 @@ class RockEnv(Env):
         if action <= Action.SAMPLE.value:
             return int(ob == Obs.NULL.value)
 
-        if ob != Obs.GOOD.value and ob != Obs.BAD.value:
-            return 0
-
         eff = self._efficiency(next_state.agent_pos, next_state.rocks[action - Action.SAMPLE.value - 1].pos)
-        if next_state.rocks[action - Action.SAMPLE.value - 1].status == 1:
+
+        if ob == Obs.GOOD.value and next_state.rocks[action - Action.SAMPLE.value - 1].status == 1:
+            return eff
+        elif ob == Obs.BAD.value and next_state.rocks[action - Action.SAMPLE.value - 1].status == -1:
             return eff
         else:
             return 1 - eff
@@ -317,6 +319,41 @@ class RockEnv(Env):
                 legal.append(self.grid[rock.pos] + 1 + Action.SAMPLE.value)
         return legal
 
+    def _generate_preferred(self):
+        actions = []
+        # rock = self.grid[self.state.agent_pos]
+        # if rock and not self.state.rocks[rock].status == 0 and len(history):
+        #     total = 0
+        #     # history
+        #     for t in range(len(history)):
+        #         if history[t][0] == rock + 1 + Action.SAMPLE.value:
+        #             if history[t][1] == Obs.GOOD.value:
+        #                 total += 1
+        #             elif history[t][1] == Obs.BAD.value:
+        #                 total -= 1
+        #     if total > 0:
+        #         actions.append(Action.SAMPLE.value)
+
+        for idx, rock in enumerate(self.state.rocks):
+            if rock.status == 1 and np.random.binomial(1, p=.95):
+                actions.append(idx + 1 + Action.SAMPLE.value)
+
+        actions += [action for action in self._generate_legal() if action < Action.SAMPLE.value]
+        return list(set(actions))
+
+        # for rock in self.state.rocks:
+        #     if rock.status != 0:
+        #         total = 0
+        #         for t in range(history.size):
+        #             if history[t].obs == Obs.GOOD.value:
+        #                 total += 1
+        #             elif history[t].obs == Obs.BAD.value:
+        #                 total -= 1
+        #         if total >= 0:
+        #             all_bad = False
+
+        # process the rocks
+
     @staticmethod
     def _efficiency(agent_pos, rock_pos, hed=20):
         # TODO check me
@@ -324,17 +361,17 @@ class RockEnv(Env):
         eff = (1 + pow(2, -d / hed)) * .5
         return eff
 
-    # @staticmethod
-    # def _select_target(rock_state, x_size):
-    #     best_dist = x_size * 2
-    #     best_rock = Coord(-1, -1)
-    #     for rock in rock_state.rocks:
-    #         if not rock.collected and rock.sampled >= 0:
-    #             d = Grid.manhattan_distance(rock_state.agent_pos, rock.pos)
-    #             if d < best_dist:
-    #                 best_dist = d
-    #                 best_rock = rock.pos
-    #     return best_rock
+    @staticmethod
+    def _select_target(rock_state, x_size):
+        best_dist = x_size * 2
+        best_rock = -1  # Coord(-1, -1)
+        for idx, rock in enumerate(rock_state.rocks):
+            if rock.status != 0 and rock.count >= 0:
+                d = Grid.manhattan_distance(rock_state.agent_pos, rock.pos)
+                if d < best_dist:
+                    best_dist = d
+                    best_rock = idx  # rock.pos
+        return best_rock
 
     @staticmethod
     def _sample_ob(agent_pos, rock, hed=20):
@@ -368,17 +405,19 @@ def int_to_one_hot(idx, size):
 
 
 if __name__ == "__main__":
-    env = RockEnv(board_size=2, num_rocks=1)
+    env = RockEnv(board_size=7, num_rocks=8)
     for idx in range(10000):
         ob = env.reset()
         done = False
         t = 0
         env.render()
+        history = []
         for i in range(400):
-            action = np.random.choice(env._generate_legal(), 1)[0]
+            action = np.random.choice(env._generate_preferred(), 1)[0]  # np.random.choice(env._generate_legal(), 1)[0]
             ob, rw, done, info = env.step(action)
-            env._set_state(info["state"])
-            env._generate_legal()
+            history.append((action, ob))
+            # env._set_state(info["state"])
+            # env._generate_legal()
             env.render()
             t += 1
             if done:
