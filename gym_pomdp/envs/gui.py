@@ -146,7 +146,7 @@ class RockGui(GridGui):
     def render(self, state, msg=None):
         self.history.append(state)
         self.draw(update_board=True)
-        self.task_bar(msg)
+        # self.task_bar(msg)
         pygame.display.update()
         GridGui._dispatch()
 

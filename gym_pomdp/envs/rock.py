@@ -42,6 +42,9 @@ config = {
     2: {"size": (2, 1),
         "init_pos": (0, 0),
         "rock_pos": [[1, 0]]},
+    4: {"size": (4, 3),
+        "init_pos": (2, 1),
+        "rock_pos": [[1, 0], [3, 1], [2, 3]]},
     7: {"size": (7, 8),
         "init_pos": (0, 3),
         "rock_pos": [[2, 0], [0, 1], [3, 1], [6, 3], [2, 4], [3, 4], [5, 5], [1, 6]]},
@@ -130,7 +133,8 @@ class RockEnv(Env):
                 else:
                     reward = 10
                     self.done = True
-                    return ob, reward, self.done, {"state": self._encode_state(self.state)}  # self._encode_state(self.state)}
+                    return ob, reward, self.done, {
+                        "state": self._encode_state(self.state)}  # self._encode_state(self.state)}
             elif action == Action.UP.value:
                 if self.state.agent_pos.y + 1 < self.grid.y_size:
                     self.state.agent_pos += Moves.UP.value
@@ -166,7 +170,6 @@ class RockEnv(Env):
             assert rock < self.num_rocks
 
             ob = self._sample_ob(self.state.agent_pos, self.state.rocks[rock])
-
             # self.state.rocks[rock].measured += 1
             #
             # eff = self._efficiency(self.state.agent_pos, self.state.rocks[rock].pos)
@@ -233,9 +236,12 @@ class RockEnv(Env):
                 obj_pos = [(self.grid.get_index(rock.pos), rock.status) for rock in self.state.rocks]
                 self.gui = RockGui((self.grid.x_size, self.grid.y_size), start_pos=start_pos, obj=obj_pos)
 
-            msg = "Action : " + action_to_str(self.last_action) + " Step: " + str(self.t) + " Rw: " + str(self.total_rw)
+            if self.last_action > Action.SAMPLE.value:
+                rock = self.last_action - Action.SAMPLE.value - 1
+                print("Rock S: {} P:{}".format(self.state.rocks[rock].status, self.state.rocks[rock].pos))
+            # msg = "Action : " + action_to_str(self.last_action) + " Step: " + str(self.t) + " Rw: " + str(self.total_rw)
             agent_pos = self.grid.get_index(self.state.agent_pos)
-            self.gui.render(agent_pos, msg=msg)
+            self.gui.render(agent_pos)
 
     def reset(self):
         self.done = False
@@ -414,23 +420,13 @@ def int_to_one_hot(idx, size):
 
 
 if __name__ == "__main__":
-    env = RockEnv(board_size=7, num_rocks=8)
-    for idx in range(10000):
-        ob = env.reset()
-        done = False
-        t = 0
+    env = RockEnv(board_size=4, num_rocks=3)
+    env.reset()
+    env.render()
+    for i in range(400):
+        action = np.random.choice(env._generate_preferred(), 1)[0]  # np.random.choice(env._generate_legal(), 1)[0]
+        ob, rw, done, info = env.step(action)
         env.render()
-        history = []
-        for i in range(400):
-            action = np.random.choice(env._generate_preferred(), 1)[0]  # np.random.choice(env._generate_legal(), 1)[0]
-            ob, rw, done, info = env.step(action)
+        if done:
+            break
 
-            history.append((action, ob))
-            # env._set_state(info["state"])
-            # env._generate_legal()
-            env.render()
-            t += 1
-            if done:
-                break
-
-        print("rw {}, t{}".format(rw, t))
