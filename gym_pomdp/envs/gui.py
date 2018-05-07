@@ -7,6 +7,7 @@ from gym_pomdp.envs.coord import Coord, Tile
 PATH = os.path.split(__file__)[0]
 FILE_PATH = os.path.join(PATH, 'assets')
 
+
 class GuiTile(Tile):
     _borderWidth = 2
     _borderColor = pygame.Color("grey")
@@ -110,14 +111,14 @@ class ShipGui(GridGui):
 class RockGui(GridGui):
     _tile_size = 50
     _assets = dict(
-        _ROBOT=os.path.join(FILE_PATH,"r2d2.png"),
+        _ROBOT=os.path.join(FILE_PATH, "r2d2.png"),
         _ROCK=os.path.join(FILE_PATH, "rock.png")
     )
 
-    def __init__(self, board_size=(5, 5), start_pos=0, obj_pos=()):
+    def __init__(self, board_size=(5, 5), start_pos=0, obj=()):
         super().__init__(*board_size, tile_size=self._tile_size)
         self.history = [start_pos] * 2
-        self.obj_pos = obj_pos
+        self.obj = obj
         self.draw(update_board=True)
         pygame.display.update()
         GridGui._dispatch()
@@ -125,12 +126,18 @@ class RockGui(GridGui):
     def draw(self, update_board=False):
 
         if update_board:
-            for obj in self.obj_pos:
-                self.board[obj].draw(img=self.assets["_ROCK"])
+            for obj in self.obj:
+                if obj[1] == -1:
+                    color = pygame.Color('red')
+                elif obj[1] == 1:
+                    color = pygame.Color('blue')
+                else:
+                    color = pygame.Color('grey')
+                self.board[obj[0]].draw(img=self.assets["_ROCK"], color=color)
 
         last_state = self.history.pop(0)
-        if last_state in self.obj_pos:
-            self.board[last_state].draw(img=self.assets["_ROCK"])
+        if last_state in self.obj:
+            self.board[last_state[0]].draw(img=self.assets["_ROCK"])
         else:
             self.board[last_state].draw()
 
@@ -138,7 +145,7 @@ class RockGui(GridGui):
 
     def render(self, state, msg=None):
         self.history.append(state)
-        self.draw()
+        self.draw(update_board=True)
         self.task_bar(msg)
         pygame.display.update()
         GridGui._dispatch()
@@ -147,12 +154,12 @@ class RockGui(GridGui):
 class TagGui(GridGui):
     _tile_size = 50
     _assets = dict(
-        _ROBOT=os.path.join(FILE_PATH,"r2d2.png"),
-        _STORM=os.path.join(FILE_PATH,"soldier.png"),
-        _RIGHT=os.path.join(FILE_PATH,"right.png"),
-        _LEFT=os.path.join(FILE_PATH,"left.png"),
-        _UP=os.path.join(FILE_PATH,"up.png"),
-        _DOWN=os.path.join(FILE_PATH,"down.png"),
+        _ROBOT=os.path.join(FILE_PATH, "r2d2.png"),
+        _STORM=os.path.join(FILE_PATH, "soldier.png"),
+        _RIGHT=os.path.join(FILE_PATH, "right.png"),
+        _LEFT=os.path.join(FILE_PATH, "left.png"),
+        _UP=os.path.join(FILE_PATH, "up.png"),
+        _DOWN=os.path.join(FILE_PATH, "down.png"),
 
     )
 
@@ -187,7 +194,7 @@ class TagGui(GridGui):
         agent_pos, obj_pos = state
         self.agent_history.append(agent_pos)
         self.update_opp(obj_pos)
-        self.draw()
+        self.draw(update_board=True)
         if msg is not None:
             self.task_bar(msg)
 

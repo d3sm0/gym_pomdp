@@ -10,13 +10,19 @@ class Obs(Enum):
     ON = 1
     NULL = 2
 
+def print_action(action, n_machines):
+    if action < n_machines * 2:
+        machine, reboot = divmod(action, 2)
+        return "M: {} A: {}".format(machine, reboot)
+    else:
+        return "Null"
 
 class NetworkEnv(Env):
     metadata = {"render.modes": ["ansi"]}
 
     def __init__(self, n_machines=10, problem_type=3):
         self._p = 0.1  # failure prob
-        self._q = 1 / 3
+        self._q = 0.33 # 33
         self._query = 0
         self._n_machines = n_machines
         self.action_space = Discrete(n_machines * 2 + 1)
@@ -29,8 +35,7 @@ class NetworkEnv(Env):
     def _compute_prob(self, action, next_state, ob):
 
         if action < self._n_machines * 2:
-            # machine, reboot = divmod(action, 2
-            machine = action // 2
+            machine, _ = divmod(action, 2)
             if next_state[machine] == ob:
                 return self._p_ob
             else:
@@ -49,8 +54,10 @@ class NetworkEnv(Env):
         self.done = False
         self.t = 0
         self._query = 0
+        self.last_action = self._n_machines * 2
         # self.state = self._get_init_state()
         self.state = np.ones(self._n_machines, dtype=np.int8)
+        self._server = 0
         return Obs.OFF.value
 
     def step(self, action):
@@ -61,11 +68,13 @@ class NetworkEnv(Env):
         self._query += 1
         ob = Obs.NULL.value
         n_failures = np.zeros(self._n_machines, dtype=np.int8)
+        self.last_action = action
 
         for i in range(self._n_machines):
             for j in range(len(self.neighbours[i])):
                 if self.state[self.neighbours[i][j]] == 0:
                     n_failures[i] = 1
+
 
         for idx in range(self._n_machines):
             if self.state[idx] == 1:
@@ -82,9 +91,7 @@ class NetworkEnv(Env):
                     self.state[idx] = 1 - np.random.binomial(1, p=self._q)
 
         if action < self._n_machines * 2:
-            machine = action // 2
-            reboot = action % 2
-            # machine, reboot = divmod(action, 2)
+            machine, reboot = divmod(action, 2)
             if reboot:
                 reward -= 2.5
                 self.state[machine] = 1
@@ -95,32 +102,31 @@ class NetworkEnv(Env):
                     ob = self.state[machine]
                 else:
                     ob = 1 - self.state[machine]
-
-        return ob, reward, self.done, {"state": self.state}
+        return ob, reward, self.done, {"state": self.state.copy()}
 
     def render(self, mode="ansi", close=False):
         if close:
             return
-
-        print("Current machines {}".format(self.state), sep="\t")
+        print("N: {}, S: {}".format(self.state.sum(), self._server), print_action(self.last_action, self._n_machines), sep='\t')
 
     def _set_state(self, state):
         self.done = False
         self.state = state
 
     def _get_init_state(self):
-        return np.ones(self._n_machines, dtype=np.int8)
+        return np.random.binomial(1, p=np.random.uniform(), size=self._n_machines)
 
     def _generate_legal(self):
-        # return list(range(self.action_space.n))
-        actions = [self.action_space.n - 1]
-        for action in range(self.action_space.n - 1):
-            # machine, reboot = divmod(action,2)
-            machine = action // 2
-            reboot = action % 2
-            if self.state[machine] == 0:
-                actions.append(action)
-        return actions
+        return list(range(self.action_space.n))
+        # actions = [self.action_space.n - 1]
+        # for action in range(self.action_space.n - 1):
+        #     machine, _ = divmod(action, 2)
+        #     if self.state[machine] == 0:
+        #         actions.append(action)
+        # return actions
+
+    def sample_action(self):
+        return np.random.choice(self._generate_legal())
 
     @staticmethod
     def make_ring_neighbours(n_machines):
@@ -151,24 +157,22 @@ class NetworkEnv(Env):
 
 if __name__ == "__main__":
 
-    env = NetworkEnv(n_machines=16, problem_type=3)
+    env = NetworkEnv(n_machines=19, problem_type=3)
     eps = []
     seed = 0
-    env.seed(seed)
-    avg = np.zeros((500, 60))
-    for ep in range(500):
+    env.seed(12)
+    for idx in range(500):
         env.reset()
         r = 0
         discount = 1
         for idx in range(60):
-            action = 2  # np.random.choice(env._generate_legal(), 1)[0]
+            action = 16 * 2  # np.random.choice(env._generate_legal())
+            # action = env.action_space.sample()
             ob, rw, done, info = env.step(action)
-            avg[ep, idx] = info['state'].mean()
             p_ob = env._compute_prob(action, info['state'], ob)
             # env.render(mode="ansi")
             # r+= rw
             r += discount * rw
             discount *= .95
-        print(r)
         eps.append(r)
     print(sum(eps) / 500)

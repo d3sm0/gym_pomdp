@@ -121,14 +121,16 @@ class RockEnv(Env):
         ob = Obs.NULL.value
         assert self.action_space.contains(action)
         assert self.done is False
-        if action < Action.SAMPLE.value:  # and self.p_move > 0 and np.random.binomial(1, p=self.p_move):
+        assert self.check_rock()
+
+        if action < Action.SAMPLE.value:  # and np.random.binomial(1, p=.9):  # and self.p_move > 0 and np.random.binomial(1, p=self.p_move):
             if action == Action.RIGHT.value:
                 if self.state.agent_pos.x + 1 < self.grid.x_size:
                     self.state.agent_pos += Moves.RIGHT.value
                 else:
                     reward = 10
                     self.done = True
-                    return ob, reward, self.done, {"state": self._encode_state(self.state)}
+                    return ob, reward, self.done, {"state": self._encode_state(self.state)}  # self._encode_state(self.state)}
             elif action == Action.UP.value:
                 if self.state.agent_pos.y + 1 < self.grid.y_size:
                     self.state.agent_pos += Moves.UP.value
@@ -155,6 +157,7 @@ class RockEnv(Env):
                 else:
                     reward = -10
                 self.state.rocks[rock].status = 0
+                self.s0[rock] = 0
             else:
                 reward = self._penalization
 
@@ -227,8 +230,8 @@ class RockEnv(Env):
         if mode == "human":
             if not hasattr(self, "gui"):
                 start_pos = self.grid.get_index(self.state.agent_pos)
-                obj_pos = [self.grid.get_index(rock.pos) for rock in self.state.rocks]
-                self.gui = RockGui((self.grid.x_size, self.grid.y_size), start_pos=start_pos, obj_pos=obj_pos)
+                obj_pos = [(self.grid.get_index(rock.pos), rock.status) for rock in self.state.rocks]
+                self.gui = RockGui((self.grid.x_size, self.grid.y_size), start_pos=start_pos, obj=obj_pos)
 
             msg = "Action : " + action_to_str(self.last_action) + " Step: " + str(self.t) + " Rw: " + str(self.total_rw)
             agent_pos = self.grid.get_index(self.state.agent_pos)
@@ -240,8 +243,12 @@ class RockEnv(Env):
         self._query = 0
         self.total_rw = 0
         self.last_action = Action.SAMPLE.value
-        self.state = self._get_init_state(should_encode=False)
+        self.state = self._get_init_state(should_encode=False, sample_random=False)
+        self.s0 = [rock.status for rock in self.state.rocks]
         return Obs.NULL.value
+
+    def check_rock(self):
+        return self.s0 == [rock.status for rock in self.state.rocks]
 
     def _set_state(self, state):
         # self.reset()
@@ -252,6 +259,7 @@ class RockEnv(Env):
         # for idx, rock in enumerate(state.rocks):
         #     self.grid[rock.pos] = idx
         # self.state = state
+        self.s0 = [rock.status for rock in self.state.rocks]
 
     def close(self):
         self.render(close=True)
@@ -272,7 +280,7 @@ class RockEnv(Env):
         else:
             return 1 - eff
 
-    def _get_init_state(self, should_encode=True):
+    def _get_init_state(self, should_encode=True, sample_random=False):
 
         self.grid.build_board(value=-1)
 
@@ -296,7 +304,8 @@ class RockEnv(Env):
                         break
                 rock_state.rocks.append(Rock(pos))
                 self.grid[pos] = idx
-
+        if sample_random:
+            rock_state.agent_pos = self.grid.sample()
         return self._encode_state(rock_state) if should_encode else rock_state
 
     def _generate_legal(self):
@@ -415,6 +424,7 @@ if __name__ == "__main__":
         for i in range(400):
             action = np.random.choice(env._generate_preferred(), 1)[0]  # np.random.choice(env._generate_legal(), 1)[0]
             ob, rw, done, info = env.step(action)
+
             history.append((action, ob))
             # env._set_state(info["state"])
             # env._generate_legal()

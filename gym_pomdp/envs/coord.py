@@ -46,7 +46,7 @@ class Grid(object):
         try:
             return self.board[idx]
         except IndexError:
-            raise IndexError()
+            return None
 
     def build_board(self, value=0):
         self.board = []

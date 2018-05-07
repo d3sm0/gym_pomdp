@@ -7,6 +7,7 @@ from gym_pomdp.envs.coord import Grid, Coord
 from gym_pomdp.envs.gui import ShipGui
 
 
+# TODO fix state
 class Compass(Enum):
     North = Coord(0, 1)
     East = Coord(1, 0)
@@ -52,6 +53,7 @@ class BattleGrid(Grid):
     def __init__(self, board_size):
         super().__init__(*board_size)
 
+
     def build_board(self, value=0):
         self.board = []
         for idx in range(self.n_tiles):
@@ -86,8 +88,9 @@ class BattleShipEnv(Env):
 
     def step(self, action):
 
-        # assert self.done == False
+        assert self.done is False
         assert self.action_space.contains(action)
+        assert self.total_remaining > 0
         self.last_action = action
         self.t += 1
         action_pos = self.grid.get_coord(action)
@@ -143,19 +146,20 @@ class BattleShipEnv(Env):
                     for i in range(ship.length):
                         pos += Compass.get_coord(ship.direction)
                         obj_pos.append(self.grid.get_index(pos))
-                self.gui = ShipGui(board_size=self.grid.get_size(), obj_pos=obj_pos)
+                self.gui = ShipGui(board_size=self.grid.get_size, obj_pos=obj_pos)
             if self.t > 0:
                 msg = "A: " + str(self.grid.get_coord(self.last_action)) + "T: " + str(self.t) + "Rw :" + str(
                     self.tot_rw)
                 self.gui.render(state=self.last_action, msg=msg)
 
     def _generate_legal(self):
+        #assert self.state.total_remaining > 0
         actions = []
         for action in range(self.action_space.n):
             action_pos = self.grid.get_coord(action)
             if not self.grid[action_pos].visited:
                 actions.append(action)
-
+        # assert len(actions) > 0
         return actions
 
     def _get_init_state(self):
