@@ -32,7 +32,7 @@ class Grid(object):
         self.x_size = x_size
         self.y_size = y_size
         self.n_tiles = self.x_size * self.y_size
-
+        self.build_board()
     def __iter__(self):
         return iter(self.board)
 
@@ -48,40 +48,29 @@ class Grid(object):
         except IndexError:
             return None
 
-    def build_board(self, value=0):
-        self.board = []
-        for idx in range(self.n_tiles):
-            self.board.append(value)
-        self.board = np.asarray(self.board).reshape((self.x_size, self.y_size))
-
-    def set_value(self, value, coord):
-        raise NotImplementedError()
-        # idx = self.get_index(coord)
-        # self.board[idx] = value
-        #
-
-    def get_value(self, coord):
-        raise NotImplementedError()
-        # idx = self.get_index(coord)
-        # assert coord == self.board[idx].coord
-        # return self.board[idx]
-    @property
-    def get_size(self):
-        return (self.x_size, self.y_size)
+    def build_board(self, value=-1):
+        self.board = np.zeros(self.get_size, dtype=np.int8) - value
+        # self.board = []
+        # for idx in range(self.n_tiles):
+        #     self.board.append(value)
+        # self.board = np.asarray(self.board)
 
     def get_index(self, coord):
-        # this is the order of the board vector
         return self.x_size * coord.y + coord.x
 
     def is_inside(self, coord):
         return coord.is_valid() and coord.x < self.x_size and coord.y < self.y_size
 
     def get_coord(self, idx):
-        assert idx >= 0 and idx < self.n_tiles
+        assert 0 <= idx < self.n_tiles
         return Coord(idx % self.x_size, idx // self.x_size)
 
     def sample(self):
         return self.get_coord(np.random.randint(self.n_tiles))
+
+    @property
+    def get_size(self):
+        return self.x_size, self.y_size
 
     @staticmethod
     def opposite(move):

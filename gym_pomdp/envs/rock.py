@@ -63,18 +63,15 @@ config = {
 # the full state is [agent_x, agent_y,
 
 
-class RockGrid(Grid):
-    def __init__(self, board_size):
-        super().__init__(*board_size)
-        self.build_board(value=-1)
+# class RockGrid(Grid):
+#     def __init__(self, board_size):
+#         super().__init__(*board_size)
+#         self.build_board(value=-1)
 
 
 class Rock(object):
     def __init__(self, pos):
-        # self.valuable = np.random.binomial(1, p=.5)
         self.status = int(np.sign(np.random.uniform(0, 1) - .5))
-        # self.status = 1
-        # self.collected = False
         self.pos = pos
         self.count = 0
         self.measured = 0
@@ -87,7 +84,6 @@ class RockState(object):
     def __init__(self, pos):
         self.agent_pos = pos
         self.rocks = []
-        # self.n_rocks = 0
         self.target = -1  # Coord(-1,-1) # -1  # Coord(-1, -1)
 
 
@@ -96,18 +92,19 @@ class RockState(object):
 class RockEnv(Env):
     metadata = {"render.modes": ["human", "ansi"]}
 
-    def __init__(self, board_size=7, num_rocks=8, p_move=0):
+    def __init__(self, board_size=7, num_rocks=8):
 
-        self.use_problem_id = False
-        self.p_move = p_move
-        if board_size in config.keys() and num_rocks == config[board_size]['size'][1]:
-            self.use_problem_id = board_size
-            self.board_size = board_size
-            self.num_rocks = config[board_size]['size'][1]
-        else:
-            self.board_size = board_size
-            self.num_rocks = num_rocks
-        self.grid = RockGrid(board_size=(board_size, board_size))
+        assert board_size in list(config.keys()) and num_rocks in config[board_size]['size']
+
+        self.num_rocks = num_rocks
+
+        self._rock_pos = [Coord(*rock) for rock in config[board_size]['rock_pos']]
+        self._agent_pos = Coord(*config[board_size]['init_pos'])
+        self.grid = Grid(board_size, board_size)
+
+        for idx, rock in enumerate(self._rock_pos):
+            self.grid.board[rock] = idx
+
         self.action_space = Discrete(len(Action) + self.num_rocks)
         self.observation_space = Discrete(len(Obs))
         self._discount = .95
@@ -117,24 +114,23 @@ class RockEnv(Env):
 
     def step(self, action):
 
-        self.last_action = action
-        self.t += 1
-        self._query += 1
-        reward = 0
-        ob = Obs.NULL.value
         assert self.action_space.contains(action)
         assert self.done is False
-        assert self.check_rock()
 
-        if action < Action.SAMPLE.value:  # and np.random.binomial(1, p=.9):  # and self.p_move > 0 and np.random.binomial(1, p=self.p_move):
+        self.last_action = action
+        self._query += 1
+
+        reward = 0
+        ob = Obs.NULL.value
+
+        if action < Action.SAMPLE.value:
             if action == Action.RIGHT.value:
                 if self.state.agent_pos.x + 1 < self.grid.x_size:
                     self.state.agent_pos += Moves.RIGHT.value
                 else:
                     reward = 10
                     self.done = True
-                    return ob, reward, self.done, {
-                        "state": self._encode_state(self.state)}  # self._encode_state(self.state)}
+                    return ob, reward, self.done, {"state": self._encode_state(self.state)}
             elif action == Action.UP.value:
                 if self.state.agent_pos.y + 1 < self.grid.y_size:
                     self.state.agent_pos += Moves.UP.value
@@ -161,7 +157,6 @@ class RockEnv(Env):
                 else:
                     reward = -10
                 self.state.rocks[rock].status = 0
-                self.s0[rock] = 0
             else:
                 reward = self._penalization
 
@@ -170,21 +165,25 @@ class RockEnv(Env):
             assert rock < self.num_rocks
 
             ob = self._sample_ob(self.state.agent_pos, self.state.rocks[rock])
-            # self.state.rocks[rock].measured += 1
-            #
-            # eff = self._efficiency(self.state.agent_pos, self.state.rocks[rock].pos)
-            #
-            # if ob == Obs.GOOD.value:
-            #     self.state.rocks[rock].count += 1
-            #     self.state.rocks[rock].lkv *= eff
-            #     self.state.rocks[rock].lkw *= (1 - eff)
-            # else:
-            #     self.state.rocks[rock].count -= 1
-            #     self.state.rocks[rock].lkw *= eff
-            #     self.state.rocks[rock].lkv *= (1 - eff)
-            #
-            # denom = (.5 * self.state.rocks[rock].lkv) + (.5 * self.state.rocks[rock].lkw)
-            # self.state.rocks[rock].prob_valuable = (.5 * self.state.rocks[rock].lkv) / denom
+
+            self.state.rocks[rock].measured += 1
+
+            eff = self._efficiency(self.state.agent_pos, self.state.rocks[rock].pos)
+
+            if ob == Obs.GOOD.value:
+                self.state.rocks[rock].count += 1
+                self.state.rocks[rock].lkv *= eff
+                self.state.rocks[rock].lkw *= (1 - eff)
+            else:
+                self.state.rocks[rock].count -= 1
+                self.state.rocks[rock].lkw *= eff
+                self.state.rocks[rock].lkv *= (1 - eff)
+
+            denom = (.5 * self.state.rocks[rock].lkv) + (.5 * self.state.rocks[rock].lkw)
+            try:
+                self.state.rocks[rock].prob_valuable = (.5 * self.state.rocks[rock].lkv) / denom
+            except RuntimeWarning:
+                print("wtf")
 
         # if self.state.target < 0 or self.state.agent_pos == self.state.rocks[self.state.target]:
         #     self.state.target = self._select_target(self.state, self.grid.x_size)
@@ -193,39 +192,29 @@ class RockEnv(Env):
         self.done = self._penalization == reward
         return ob, reward, self.done, {"state": self._encode_state(self.state)}
 
-    def _decode_state(self, state):
+    def _decode_state(self, state, as_array=False):
 
-        agent_pos = self.grid.get_coord(state[0])
-        board = state[1:-self.num_rocks].reshape(self.grid.get_size)
-        rock_status = state[-self.num_rocks:]
+        agent_pos = Coord(*state['agent_pos'])
         rock_state = RockState(agent_pos)
-        # assert board[board != -1].shape[0] == rock_status.shape[0]
-        # true_pos = [self.grid.get_index(rock.pos) for rock in self.state.rocks]
-        # true_status = [rock.status for rock in self.state.rocks]
-        # _, pos_list = list(zip(*sorted(zip(board[board != -1], np.where(board.T.flatten() != -1)[0]))))
-        pos_list = np.where(board.T.flatten() != -1)[0]
-
-        # assert np.all(true_pos == pos_list)
-        # assert np.all(true_status == rock_status)
-        for pos, status in zip(pos_list, rock_status):
-            rock = Rock(pos=self.grid.get_coord(pos))
-            rock.status = status
+        for r in state['rocks']:
+            rock = Rock(pos=0)
+            rock.__dict__.update(r)
             rock_state.rocks.append(rock)
 
-        return rock_state, board
+        if as_array:
+            rocks = []
+            for rock in rock_state.rocks:
+                rocks.append(rock.status)
+
+            return np.concatenate([[self.grid.get_index(agent_pos)], rocks])
+
+        return rock_state
 
     def _encode_state(self, state):
+        # use dictionary for state encodign
+
+        return _encode_dict(state)
         # rocks can take 3 values: -1, 1, 0 if collected
-        grid = self.grid.board.flatten()
-        agent_idx = np.array((self.grid.get_index(state.agent_pos),), dtype=np.int32)
-        rocks = np.zeros(self.num_rocks, dtype=np.int32)
-
-        for idx, rock in enumerate(state.rocks):
-            rocks[idx] = rock.status
-
-        # assert np.all(rocks == [rock.status for rock in self.state.rocks])
-        # assert len(grid[grid != -1]) == len(rocks)
-        return np.concatenate([agent_idx, grid, rocks])
 
     def render(self, mode='human', close=False):
         if close:
@@ -245,34 +234,21 @@ class RockEnv(Env):
 
     def reset(self):
         self.done = False
-        self.t = 0
         self._query = 0
-        self.total_rw = 0
         self.last_action = Action.SAMPLE.value
-        self.state = self._get_init_state(should_encode=False, sample_random=False)
-        self.s0 = [rock.status for rock in self.state.rocks]
+        self.state = self._get_init_state(should_encode=False)
         return Obs.NULL.value
 
-    def check_rock(self):
-        return self.s0 == [rock.status for rock in self.state.rocks]
-
     def _set_state(self, state):
-        # self.reset()
         self.done = False
-        self.state, board = self._decode_state(state)
-        self.grid.board = board.reshape(self.grid.get_size)
-        # self.grid.build_board(-1)
-        # for idx, rock in enumerate(state.rocks):
-        #     self.grid[rock.pos] = idx
-        # self.state = state
-        self.s0 = [rock.status for rock in self.state.rocks]
+        self.state = self._decode_state(state)
 
     def close(self):
         self.render(close=True)
 
     def _compute_prob(self, action, next_state, ob):
 
-        next_state, _ = self._decode_state(next_state)
+        next_state = self._decode_state(next_state)
 
         if action <= Action.SAMPLE.value:
             return int(ob == Obs.NULL.value)
@@ -286,32 +262,11 @@ class RockEnv(Env):
         else:
             return 1 - eff
 
-    def _get_init_state(self, should_encode=True, sample_random=False):
+    def _get_init_state(self, should_encode=True):
 
-        self.grid.build_board(value=-1)
-
-        if self.use_problem_id:
-            init_state = Coord(*config[self.grid.x_size]["init_pos"])
-            rock_pos = config[self.grid.x_size]["rock_pos"]
-        else:
-            init_state = self.grid.sample()
-            rock_pos = []
-        rock_state = RockState(init_state)
-        if self.use_problem_id:
-            for idx in range(self.num_rocks):
-                pos = Coord(*rock_pos[idx])
-                rock_state.rocks.append(Rock(pos))
-                self.grid[pos] = idx
-        else:
-            for idx in range(self.num_rocks):
-                while True:
-                    pos = self.grid.sample()
-                    if self.grid.board[pos] == -1:
-                        break
-                rock_state.rocks.append(Rock(pos))
-                self.grid[pos] = idx
-        if sample_random:
-            rock_state.agent_pos = self.grid.sample()
+        rock_state = RockState(self._agent_pos)
+        for idx in range(self.num_rocks):
+            rock_state.rocks.append(Rock(self._rock_pos[idx]))
         return self._encode_state(rock_state) if should_encode else rock_state
 
     def _generate_legal(self):
@@ -334,40 +289,94 @@ class RockEnv(Env):
                 legal.append(self.grid[rock.pos] + 1 + Action.SAMPLE.value)
         return legal
 
-    def _generate_preferred(self):
+    def _generate_preferred(self, history):
+        # return self._generate_legal()
+
         actions = []
-        # rock = self.grid[self.state.agent_pos]
-        # if rock and not self.state.rocks[rock].status == 0 and len(history):
-        #     total = 0
-        #     # history
-        #     for t in range(len(history)):
-        #         if history[t][0] == rock + 1 + Action.SAMPLE.value:
-        #             if history[t][1] == Obs.GOOD.value:
-        #                 total += 1
-        #             elif history[t][1] == Obs.BAD.value:
-        #                 total -= 1
-        #     if total > 0:
-        #         actions.append(Action.SAMPLE.value)
 
-        for idx, rock in enumerate(self.state.rocks):
-            if rock.status == 1 and np.random.binomial(1, p=.95):
-                actions.append(idx + 1 + Action.SAMPLE.value)
-
-        actions += [action for action in self._generate_legal() if action < Action.SAMPLE.value]
-        return list(set(actions))
-
-        # for rock in self.state.rocks:
-        #     if rock.status != 0:
-        #         total = 0
-        #         for t in range(history.size):
-        #             if history[t].obs == Obs.GOOD.value:
-        #                 total += 1
-        #             elif history[t].obs == Obs.BAD.value:
-        #                 total -= 1
-        #         if total >= 0:
-        #             all_bad = False
+        # sample rocks with high likelihood of being good
+        rock = self.grid[self.state.agent_pos]
+        if rock >= 0 and self.state.rocks[rock].status != 0 and history.size:
+            total = 0
+            # history
+            for t in range(history.size):
+                if history[t].action == rock + 1 + Action.SAMPLE.value:
+                    if history[t].ob == Obs.GOOD.value:
+                        total += 1
+                    elif history[t].ob == Obs.BAD.value:
+                        total -= 1
+            if total > 0:
+                actions.append(Action.SAMPLE.value)
+                return actions
 
         # process the rocks
+
+        all_bad = True
+        direction = {
+            "north": False,
+            "south": False,
+            "west": False,
+            "east": False
+        }
+        for idx in range(self.num_rocks):
+            rock = self.state.rocks[idx]
+            if rock.status != 0:
+                total = 0
+                for t in range(history.size):
+                    if history[t].action == idx + 1 + Action.SAMPLE.value:
+                        if history[t].ob == Obs.GOOD.value:
+                            total += 1
+                        elif history[t].ob == Obs.BAD.value:
+                            total -= 1
+                if total >= 0:
+                    all_bad = False
+
+                    if rock.pos.y > self.state.agent_pos.y:
+                        direction['north'] = True
+                    elif rock.pos.y < self.state.agent_pos.y:
+                        direction['south'] = True
+                    elif rock.pos.x < self.state.agent_pos.x:
+                        direction['west'] = True
+                    elif rock.pos.x > self.state.agent_pos.x:
+                        direction['east'] = True
+
+        if all_bad:
+            actions.append(Action.RIGHT.value)
+            return actions
+
+        # generate a random legal move
+        # do not measure a collected rock
+        # do no measure a rock too often
+        # do not measure clearly bad rocks
+        # don't move in a direction that puts you closer to bad rocks
+        # never sample a rock
+
+        if self.state.agent_pos.y + 1 < self.grid.y_size and direction['north']:
+            actions.append(Action.UP.value)
+
+        if direction['east']:
+            actions.append(Action.RIGHT.value)
+
+        if self.state.agent_pos.y - 1 >= 0 and direction['south']:
+            actions.append(Action.DOWN.value)
+
+        if self.state.agent_pos.x - 1 >= 0 and direction['west']:
+            actions.append(Action.LEFT.value)
+
+        for idx, rock in enumerate(self.state.rocks):
+            if not rock.status == 0 and rock.measured < 5 and abs(rock.count) < 2 and 0 < rock.prob_valuable < 1:
+                actions.append(idx + 1 + Action.SAMPLE.value)
+
+        if len(actions) == 0:
+            return self._generate_legal()
+        return actions
+
+    def __dict2np__(self, state):
+        idx = self.grid.get_index(Coord(*state['agent_pos']))
+        rocks = []
+        for rock in state['rocks']:
+            rocks.append(rock['status'])
+        return np.concatenate([[idx], rocks])
 
     @staticmethod
     def _efficiency(agent_pos, rock_pos, hed=20):
@@ -413,6 +422,18 @@ class RockEnv(Env):
     #     return True
 
 
+def _encode_dict(state):
+    enc_state = {}
+    for k, v in vars(state).items():
+        if isinstance(v, list):
+            l = []
+            for idx, t in enumerate(v):
+                l.append(vars(t))
+            v = l
+        enc_state[k] = v
+    return enc_state
+
+
 def int_to_one_hot(idx, size):
     h = np.zeros(size, dtype=np.int32)
     h[int(idx)] = 1
@@ -420,13 +441,22 @@ def int_to_one_hot(idx, size):
 
 
 if __name__ == "__main__":
-    env = RockEnv(board_size=4, num_rocks=3)
+    from gym_pomdp.envs.history import History
+
+    history = History()
+    env = RockEnv(board_size=7, num_rocks=8)
     env.reset()
     env.render()
+    r = 0
+    discount = 1.
     for i in range(400):
-        action = np.random.choice(env._generate_preferred(), 1)[0]  # np.random.choice(env._generate_legal(), 1)[0]
+        action = np.random.choice(env._generate_preferred(history))  # np.random.choice(env._generate_legal(), 1)[0]
+        env._generate_preferred(history)
         ob, rw, done, info = env.step(action)
+        history.append(action, ob)
         env.render()
+        r += rw * discount
+        discount *= env._discount
         if done:
             break
-
+    print(r)

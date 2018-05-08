@@ -3,7 +3,6 @@ from enum import Enum
 import gym
 import numpy as np
 from gym.spaces import Discrete
-
 from gym_pomdp.envs.gui import TigerGui
 
 
@@ -75,13 +74,13 @@ class TigerEnv(gym.Env):
         assert self.action_space.contains(action)
         assert self.done is False
         self.t += 1
-        self._query+=1
+        self._query += 1
         self.last_action = action
 
         rw = TigerEnv._compute_rw(self.state, action)
         if TigerEnv._is_terminal(self.state, action):
             self.done = True
-            return self.state, rw, self.done, {'state':self.state}
+            return self.state, rw, self.done, {'state': self.state}
 
         self._sample_state(action)
         ob = TigerEnv._sample_ob(action, self.state)
@@ -112,11 +111,15 @@ class TigerEnv(gym.Env):
     def _generate_legal(self):
         return list(range(self.action_space.n))
 
+    def _generate_preferred(self, history):
+        return self._generate_legal()
+
     def _sample_state(self, action):
         if action == Action.RIGHT.value or action == Action.LEFT.value:
             self.state = self.state_space.sample()
 
     def _get_init_state(self):
+        # fix initial belief to be exact
         return self.state_space.sample()
 
     @staticmethod

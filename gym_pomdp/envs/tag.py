@@ -278,7 +278,7 @@ class TagEnv(Env):
         assert len(actions) > 0
         return actions
 
-
+# add heuristcs to tag problem
 class TagState(object):
     def __init__(self, coord):
         self.agent_pos = coord
