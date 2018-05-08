@@ -92,11 +92,12 @@ class RockState(object):
 class RockEnv(Env):
     metadata = {"render.modes": ["human", "ansi"]}
 
-    def __init__(self, board_size=7, num_rocks=8):
+    def __init__(self, board_size=7, num_rocks=8, use_heuristic=False):
 
         assert board_size in list(config.keys()) and num_rocks in config[board_size]['size']
 
         self.num_rocks = num_rocks
+        self._use_heuristic = use_heuristic
 
         self._rock_pos = [Coord(*rock) for rock in config[board_size]['rock_pos']]
         self._agent_pos = Coord(*config[board_size]['init_pos'])
@@ -290,7 +291,8 @@ class RockEnv(Env):
         return legal
 
     def _generate_preferred(self, history):
-        # return self._generate_legal()
+        if not self._use_heuristic:
+            return self._generate_legal()
 
         actions = []
 
@@ -369,6 +371,8 @@ class RockEnv(Env):
 
         if len(actions) == 0:
             return self._generate_legal()
+
+        assert np.all(np.isin(actions, self._generate_legal()))
         return actions
 
     def __dict2np__(self, state):
