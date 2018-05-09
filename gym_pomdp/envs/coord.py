@@ -48,7 +48,7 @@ class Grid(object):
         except IndexError:
             return None
 
-    def build_board(self, value=-1):
+    def build_board(self, value=1):
         self.board = np.zeros(self.get_size, dtype=np.int8) - value
         # self.board = []
         # for idx in range(self.n_tiles):

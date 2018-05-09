@@ -44,7 +44,7 @@ config = {
         "init_pos": (0, 0),
         "rock_pos": [[1, 0]]},
     4: {"size": (4, 3),
-        "init_pos": (2, 1),
+        "init_pos": (0, 0),
         "rock_pos": [[1, 0], [3, 1], [2, 3]]},
     7: {"size": (7, 8),
         "init_pos": (0, 3),
@@ -448,7 +448,7 @@ if __name__ == "__main__":
     from gym_pomdp.envs.history import History
 
     history = History()
-    env = RockEnv(board_size=7, num_rocks=8)
+    env = RockEnv(board_size=4, num_rocks=3)
     env.reset()
     env.render()
     r = 0
