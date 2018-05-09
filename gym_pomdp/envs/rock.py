@@ -3,6 +3,7 @@ from enum import Enum
 import numpy as np
 from gym import Env
 from gym.spaces import Discrete
+
 from gym_pomdp.envs.coord import Coord, Grid, Moves
 from gym_pomdp.envs.gui import RockGui
 
@@ -372,7 +373,6 @@ class RockEnv(Env):
         if len(actions) == 0:
             return self._generate_legal()
 
-        assert np.all(np.isin(actions, self._generate_legal()))
         return actions
 
     def __dict2np__(self, state):

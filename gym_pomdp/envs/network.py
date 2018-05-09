@@ -124,7 +124,8 @@ class NetworkEnv(Env):
         #     if self.state[machine] == 0:
         #         actions.append(action)
         # return actions
-
+    def _generate_preferred(self, history):
+        return self._generate_legal()
     def sample_action(self):
         return np.random.choice(self._generate_legal())
 

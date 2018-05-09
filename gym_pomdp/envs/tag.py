@@ -3,6 +3,7 @@ from enum import Enum
 import numpy as np
 from gym import Env
 from gym.spaces import Discrete
+
 from gym_pomdp.envs.coord import Coord, Moves, Grid
 
 
@@ -184,7 +185,6 @@ class TagEnv(Env):
 
     def _get_init_state(self, should_encode=False):
 
-
         agent_pos = self.grid.sample()
         assert self.grid.is_inside(agent_pos)
         tag_state = TagState(agent_pos)
@@ -227,11 +227,14 @@ class TagEnv(Env):
         if action < Action.TAG.value:
             for opp_pos in state.opponent_pos:
                 if opp_pos == state.agent_pos:
-                    ob= self.grid.n_tiles  # 29 observation
+                    ob = self.grid.n_tiles  # 29 observation
         return ob
 
     def _generate_legal(self):
         return list(range(self.action_space.n))
+
+    def _generate_preferred(self, history):
+        return self._generate_legal()
         # actions = [Action.TAG.value]
         # actions = []
         # for action in Action:
@@ -277,6 +280,7 @@ class TagEnv(Env):
             actions.append(Moves.LEFT)
         assert len(actions) > 0
         return actions
+
 
 # add heuristcs to tag problem
 class TagState(object):
