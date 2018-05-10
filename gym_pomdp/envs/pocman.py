@@ -308,9 +308,9 @@ class PocEnv(Env):
 
     def _next_pos(self, pos, direction):
         direction = Moves.get_coord(direction)
-        if pos.x == 0 and pos.y == self.board['_passage_y'] and direction == Moves.RIGHT:
+        if pos.x == 0 and pos.y == self.board['_passage_y'] and direction == Moves.EAST:
             next_pos = Coord(self.grid.x_size - 1, pos.y)
-        elif pos.x == self.grid.x_size - 1 and pos.y == self.board['_passage_y'] and direction == Moves.LEFT:
+        elif pos.x == self.grid.x_size - 1 and pos.y == self.board['_passage_y'] and direction == Moves.WEST:
             next_pos = Coord(0, pos.y)
         else:
             next_pos = pos + direction

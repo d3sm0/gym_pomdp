@@ -15,22 +15,22 @@ class Obs(Enum):
 
 
 class Action(Enum):
-    UP = 0
-    RIGHT = 1  # east
-    DOWN = 2
-    LEFT = 3  # west
+    NORTH = 0
+    EAST = 1  # east
+    SOUTH = 2
+    WEST = 3  # west
     SAMPLE = 4
 
 
 def action_to_str(action):
     if action == 0:
-        return "up"
+        return "north"
     elif action == 1:
-        return "right"
+        return "east"
     elif action == 2:
-        return "down"
+        return "south"
     elif action == 3:
-        return "left"
+        return "west"
     elif action == 4:
         return "sample"
     elif action > 4:
@@ -88,8 +88,7 @@ class RockState(object):
         self.target = -1  # Coord(-1,-1) # -1  # Coord(-1, -1)
 
 
-# remove illegal termination
-# add a stochastic version of rock sampling
+
 class RockEnv(Env):
     metadata = {"render.modes": ["human", "ansi"]}
 
@@ -126,26 +125,26 @@ class RockEnv(Env):
         ob = Obs.NULL.value
 
         if action < Action.SAMPLE.value:
-            if action == Action.RIGHT.value:
+            if action == Action.EAST.value:
                 if self.state.agent_pos.x + 1 < self.grid.x_size:
-                    self.state.agent_pos += Moves.RIGHT.value
+                    self.state.agent_pos += Moves.EAST.value
                 else:
                     reward = 10
                     self.done = True
                     return ob, reward, self.done, {"state": self._encode_state(self.state)}
-            elif action == Action.UP.value:
+            elif action == Action.NORTH.value:
                 if self.state.agent_pos.y + 1 < self.grid.y_size:
-                    self.state.agent_pos += Moves.UP.value
+                    self.state.agent_pos += Moves.NORTH.value
                 else:
                     reward = self._penalization
-            elif action == Action.DOWN.value:
+            elif action == Action.SOUTH.value:
                 if self.state.agent_pos.y - 1 >= 0:
-                    self.state.agent_pos += Moves.DOWN.value
+                    self.state.agent_pos += Moves.SOUTH.value
                 else:
                     reward = self._penalization
-            elif action == Action.LEFT.value:
+            elif action == Action.WEST.value:
                 if self.state.agent_pos.x - 1 >= 0:
-                    self.state.agent_pos += Moves.LEFT.value
+                    self.state.agent_pos += Moves.WEST.value
                 else:
                     reward = self._penalization
             else:
@@ -182,15 +181,8 @@ class RockEnv(Env):
                 self.state.rocks[rock].lkv *= (1 - eff)
 
             denom = (.5 * self.state.rocks[rock].lkv) + (.5 * self.state.rocks[rock].lkw)
-            try:
-                self.state.rocks[rock].prob_valuable = (.5 * self.state.rocks[rock].lkv) / denom
-            except RuntimeWarning:
-                print("wtf")
+            self.state.rocks[rock].prob_valuable = (.5 * self.state.rocks[rock].lkv) / denom
 
-        # if self.state.target < 0 or self.state.agent_pos == self.state.rocks[self.state.target]:
-        #     self.state.target = self._select_target(self.state, self.grid.x_size)
-
-        # self.done = all([rock.status == 0 for rock in self.state.rocks])  # self._penalization == reward
         self.done = self._penalization == reward
         return ob, reward, self.done, {"state": self._encode_state(self.state)}
 
@@ -272,14 +264,14 @@ class RockEnv(Env):
         return self._encode_state(rock_state) if should_encode else rock_state
 
     def _generate_legal(self):
-        legal = [Action.RIGHT.value]  # can always go east
+        legal = [Action.EAST.value]  # can always go east
         if self.state.agent_pos.y + 1 < self.grid.y_size:
-            legal.append(Action.UP.value)
+            legal.append(Action.NORTH.value)
 
         if self.state.agent_pos.y - 1 >= 0:
-            legal.append(Action.DOWN.value)
+            legal.append(Action.SOUTH.value)
         if self.state.agent_pos.x - 1 >= 0:
-            legal.append(Action.LEFT.value)
+            legal.append(Action.WEST.value)
 
         rock = self.grid[self.state.agent_pos]
         if rock >= 0 and self.state.rocks[rock].status != 0:
@@ -344,7 +336,7 @@ class RockEnv(Env):
                         direction['east'] = True
 
         if all_bad:
-            actions.append(Action.RIGHT.value)
+            actions.append(Action.EAST.value)
             return actions
 
         # generate a random legal move
@@ -355,16 +347,16 @@ class RockEnv(Env):
         # never sample a rock
 
         if self.state.agent_pos.y + 1 < self.grid.y_size and direction['north']:
-            actions.append(Action.UP.value)
+            actions.append(Action.NORTH.value)
 
         if direction['east']:
-            actions.append(Action.RIGHT.value)
+            actions.append(Action.EAST.value)
 
         if self.state.agent_pos.y - 1 >= 0 and direction['south']:
-            actions.append(Action.DOWN.value)
+            actions.append(Action.SOUTH.value)
 
         if self.state.agent_pos.x - 1 >= 0 and direction['west']:
-            actions.append(Action.LEFT.value)
+            actions.append(Action.WEST.value)
 
         for idx, rock in enumerate(self.state.rocks):
             if not rock.status == 0 and rock.measured < 5 and abs(rock.count) < 2 and 0 < rock.prob_valuable < 1:
@@ -426,6 +418,85 @@ class RockEnv(Env):
     #     return True
 
 
+# remove illegal termination
+# add a stochastic version of rock sampling
+class StochasticRockEnv(RockEnv):
+    def __init__(self, board_size=7, num_rocks=8, use_heuristic=False, p_move=.8):
+        super().__init__(board_size, num_rocks, use_heuristic)
+        self.p_move = p_move
+
+    def step(self, action):
+        assert self.action_space.contains(action)
+        assert self.done is False
+
+        self.last_action = action
+        self._query += 1
+
+        reward = 0
+        ob = Obs.NULL.value
+        if np.random.binomial(1, p=self.p_move):
+            if action < Action.SAMPLE.value:
+                if action == Action.EAST.value:
+                    if self.state.agent_pos.x + 1 < self.grid.x_size:
+                        self.state.agent_pos += Moves.EAST.value
+                    else:
+                        reward = 10
+                        self.done = True
+                        return ob, reward, self.done, {"state": self._encode_state(self.state)}
+                elif action == Action.NORTH.value:
+                    if self.state.agent_pos.y + 1 < self.grid.y_size:
+                        self.state.agent_pos += Moves.NORTH.value
+                    else:
+                        reward = self._penalization
+                elif action == Action.SOUTH.value:
+                    if self.state.agent_pos.y - 1 >= 0:
+                        self.state.agent_pos += Moves.SOUTH.value
+                    else:
+                        reward = self._penalization
+                elif action == Action.WEST.value:
+                    if self.state.agent_pos.x - 1 >= 0:
+                        self.state.agent_pos += Moves.WEST.value
+                    else:
+                        reward = self._penalization
+                else:
+                    raise NotImplementedError()
+
+            if action == Action.SAMPLE.value:
+                rock = self.grid[self.state.agent_pos]
+                if rock >= 0 and not self.state.rocks[rock].status == 0:  # collected
+                    if self.state.rocks[rock].status == 1:
+                        reward = 10
+                    else:
+                        reward = -10
+                    self.state.rocks[rock].status = 0
+                else:
+                    reward = self._penalization
+
+            if action > Action.SAMPLE.value:
+                rock = action - Action.SAMPLE.value - 1
+                assert rock < self.num_rocks
+
+                ob = self._sample_ob(self.state.agent_pos, self.state.rocks[rock])
+
+                self.state.rocks[rock].measured += 1
+
+                eff = self._efficiency(self.state.agent_pos, self.state.rocks[rock].pos)
+
+                if ob == Obs.GOOD.value:
+                    self.state.rocks[rock].count += 1
+                    self.state.rocks[rock].lkv *= eff
+                    self.state.rocks[rock].lkw *= (1 - eff)
+                else:
+                    self.state.rocks[rock].count -= 1
+                    self.state.rocks[rock].lkw *= eff
+                    self.state.rocks[rock].lkv *= (1 - eff)
+
+                denom = (.5 * self.state.rocks[rock].lkv) + (.5 * self.state.rocks[rock].lkw)
+                self.state.rocks[rock].prob_valuable = (.5 * self.state.rocks[rock].lkv) / denom
+
+        self.done = self._penalization == reward
+        return ob, reward, self.done, {"state": self._encode_state(self.state)}
+
 def _encode_dict(state):
     enc_state = {}
     for k, v in vars(state).items():
@@ -448,7 +519,7 @@ if __name__ == "__main__":
     from gym_pomdp.envs.history import History
 
     history = History()
-    env = RockEnv(board_size=4, num_rocks=3)
+    env =RockEnv(board_size=4, num_rocks=3)
     env.reset()
     env.render()
     r = 0

@@ -99,10 +99,10 @@ class Grid(object):
 
 
 class Moves(Enum):
-    UP = Coord(0, 1)
-    RIGHT = Coord(1, 0)
-    DOWN = Coord(0, -1)
-    LEFT = Coord(-1, 0)
+    NORTH = Coord(0, 1)
+    EAST = Coord(1, 0)
+    SOUTH = Coord(0, -1)
+    WEST = Coord(-1, 0)
     NULL = Coord(0, 0)
 
     @staticmethod
@@ -120,10 +120,10 @@ from unittest import TestCase
 class TestCoord(TestCase):
     assert (Coord(3, 3) + Coord(2, 2)) == Coord(5, 5)
     assert (Coord(5, 2) + Coord(2, 5)) == Coord(7, 7)
-    assert (Coord(2, 2) + Moves.UP.value) == Coord(2, 3)
-    assert (Coord(2, 2) + Moves.LEFT.value) == Coord(1, 2)
-    assert (Coord(2, 2) + Moves.DOWN.value) == Coord(2, 1)
-    assert (Coord(2, 2) + Moves.RIGHT.value) == Coord(3, 2)
+    assert (Coord(2, 2) + Moves.NORTH.value) == Coord(2, 3)
+    assert (Coord(2, 2) + Moves.WEST.value) == Coord(1, 2)
+    assert (Coord(2, 2) + Moves.SOUTH.value) == Coord(2, 1)
+    assert (Coord(2, 2) + Moves.EAST.value) == Coord(3, 2)
 
     # grid = Grid()
 
