@@ -49,6 +49,10 @@ config = {
     7: {"size": (7, 8),
         "init_pos": (0, 3),
         "rock_pos": [[2, 0], [0, 1], [3, 1], [6, 3], [2, 4], [3, 4], [5, 5], [1, 6]]},
+    11: {"size": (11, 11),
+         "init_pos": (0, 5),
+         "rock_pos": [[0, 3], [0, 7], [1, 8], [2, 4], [3, 3], [3, 8], [4, 3], [5, 8], [6, 1], [9, 3], [9, 9]],
+         },
     15: {"size": (15, 15),
          "init_pos": (0, 5),
          "rock_pos":
@@ -86,7 +90,6 @@ class RockState(object):
         self.agent_pos = pos
         self.rocks = []
         self.target = -1  # Coord(-1,-1) # -1  # Coord(-1, -1)
-
 
 
 class RockEnv(Env):
@@ -500,6 +503,7 @@ class StochasticRockEnv(RockEnv):
         self.done = self._penalization == reward
         return ob, reward, self.done, {"state": self._encode_state(self.state)}
 
+
 def _encode_dict(state):
     enc_state = {}
     for k, v in vars(state).items():
@@ -522,7 +526,7 @@ if __name__ == "__main__":
     from gym_pomdp.envs.history import History
 
     history = History()
-    env =RockEnv(board_size=4, num_rocks=3)
+    env = RockEnv(board_size=4, num_rocks=3)
     env.reset()
     env.render()
     r = 0
