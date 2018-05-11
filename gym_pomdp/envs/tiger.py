@@ -3,6 +3,7 @@ from enum import Enum
 import gym
 import numpy as np
 from gym.spaces import Discrete
+
 from gym_pomdp.envs.gui import TigerGui
 
 
@@ -65,7 +66,6 @@ class TigerEnv(gym.Env):
         return Obs.NULL.value
 
     def seed(self, seed=1234):
-        # TODO check if all seed are equal
         np.random.seed(seed)
         return [seed]
 

@@ -113,6 +113,9 @@ class RockEnv(Env):
         self._penalization = -100
         self._query = 0
 
+    def seed(self, seed=None):
+        np.random.seed(seed)
+
     def step(self, action):
 
         assert self.action_space.contains(action)

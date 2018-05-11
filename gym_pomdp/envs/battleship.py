@@ -3,6 +3,7 @@ from enum import Enum
 import numpy as np
 from gym import Env
 from gym.spaces import Discrete
+
 from gym_pomdp.envs.coord import Grid, Coord
 from gym_pomdp.envs.gui import ShipGui
 
@@ -53,7 +54,6 @@ class BattleGrid(Grid):
     def __init__(self, board_size):
         super().__init__(*board_size)
 
-
     def build_board(self, value=0):
         self.board = []
         for idx in range(self.n_tiles):
@@ -74,6 +74,9 @@ class BattleShipEnv(Env):
         self.total_remaining = max_len - 1
         self.max_len = max_len + 1
 
+    def seed(self, seed=None):
+        np.random.seed(seed)
+
     def _compute_prob(self, action, next_state, ob):
 
         action_pos = self.grid.get_coord(action)
@@ -84,7 +87,6 @@ class BattleShipEnv(Env):
             return 1
         else:
             return int(ob == Obs.NULL.value)
-
 
     def step(self, action):
 
@@ -153,7 +155,7 @@ class BattleShipEnv(Env):
                 self.gui.render(state=self.last_action, msg=msg)
 
     def _generate_legal(self):
-        #assert self.state.total_remaining > 0
+        # assert self.state.total_remaining > 0
         actions = []
         for action in range(self.action_space.n):
             action_pos = self.grid.get_coord(action)

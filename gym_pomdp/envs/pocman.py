@@ -151,6 +151,9 @@ class PocEnv(Env):
         self._reward_range = 100
         self._discount = .95
 
+    def seed(self, seed=None):
+        np.random.seed(seed)
+
     def is_power(self, idx):
         return self.board['_maze'][idx] == 3
 
