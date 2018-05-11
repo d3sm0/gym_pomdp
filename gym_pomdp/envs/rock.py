@@ -10,8 +10,8 @@ from gym_pomdp.envs.gui import RockGui
 
 class Obs(Enum):
     NULL = 0
-    GOOD = 1
-    BAD = -1
+    GOOD = 2
+    BAD = 1
 
 
 class Action(Enum):
@@ -430,6 +430,7 @@ class StochasticRockEnv(RockEnv):
     def __init__(self, board_size=7, num_rocks=8, use_heuristic=False, p_move=.8):
         super().__init__(board_size, num_rocks, use_heuristic)
         self.p_move = p_move
+        self._penalization = 0
 
     def step(self, action):
         assert self.action_space.contains(action)
@@ -500,7 +501,7 @@ class StochasticRockEnv(RockEnv):
                 denom = (.5 * self.state.rocks[rock].lkv) + (.5 * self.state.rocks[rock].lkw)
                 self.state.rocks[rock].prob_valuable = (.5 * self.state.rocks[rock].lkv) / denom
 
-        self.done = self._penalization == reward
+        # self.done = self._penalization == reward
         return ob, reward, self.done, {"state": self._encode_state(self.state)}
 
 
