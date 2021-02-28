@@ -1,4 +1,5 @@
 from enum import Enum
+from typing import NamedTuple, List, Union
 
 import numpy as np
 from gym import Env
@@ -299,12 +300,11 @@ class RockEnv(Env):
         rock = self.grid[self.state.agent_pos]
         if rock >= 0 and self.state.rocks[rock].status != 0 and history.size:
             total = 0
-            # history
-            for t in range(history.size):
-                if history[t].action == rock + 1 + Action.SAMPLE.value:
-                    if history[t].ob == Obs.GOOD.value:
+            for transition in history:
+                if transition.action == rock + 1 + Action.SAMPLE.value:
+                    if transition.next_observation == Obs.GOOD.value:
                         total += 1
-                    elif history[t].ob == Obs.BAD.value:
+                    elif transition.next_observation == Obs.BAD.value:
                         total -= 1
             if total > 0:
                 actions.append(Action.SAMPLE.value)
@@ -323,11 +323,11 @@ class RockEnv(Env):
             rock = self.state.rocks[idx]
             if rock.status != 0:
                 total = 0
-                for t in range(history.size):
-                    if history[t].action == idx + 1 + Action.SAMPLE.value:
-                        if history[t].ob == Obs.GOOD.value:
+                for transition in history:
+                    if transition.action == idx + 1 + Action.SAMPLE.value:
+                        if transition.next_observation == Obs.GOOD.value:
                             total += 1
-                        elif history[t].ob == Obs.BAD.value:
+                        elif transition.observation == Obs.BAD.value:
                             total -= 1
                 if total >= 0:
                     all_bad = False
@@ -382,7 +382,6 @@ class RockEnv(Env):
 
     @staticmethod
     def _efficiency(agent_pos, rock_pos, hed=20):
-        # TODO check me
         d = Grid.euclidean_distance(agent_pos, rock_pos)
         eff = (1 + pow(2, -d / hed)) * .5
         return eff
@@ -523,20 +522,49 @@ def int_to_one_hot(idx, size):
     return h
 
 
+class Transition(NamedTuple):
+    observation: List[float]
+    action: int
+    reward: float
+    next_observation: List[float]
+    done: bool
+
+
+class History:
+    def __init__(self, max_size: Union[int, None] = None):
+        self._max_size = max_size
+        self._history = []
+
+    def __getitem__(self, item: int) -> Transition:
+        return self._history[item]
+
+    def append(self, transition: Transition):
+        if self._max_size is not None and self.size > self._max_size:
+            self._history.pop(0)
+        self._history.append(transition)
+
+    @property
+    def size(self) -> int:
+        return self._history.__len__()
+
+    def __repr__(self):
+        return f"size:{self.size}"
+
+
 if __name__ == "__main__":
-    from gym_pomdp.envs.history import History
+    # from gym_pomdp.envs.history import History
 
     history = History()
-    env = RockEnv(board_size=4, num_rocks=3)
-    env.reset()
+    env = RockEnv(board_size=4, num_rocks=3, use_heuristic=True)
+    ob = env.reset()
     env.render()
     r = 0
     discount = 1.
     for i in range(400):
-        action = np.random.choice(env._generate_preferred(history))  # np.random.choice(env._generate_legal(), 1)[0]
-        env._generate_preferred(history)
-        ob, rw, done, info = env.step(action)
-        history.append(action, ob)
+        action = np.random.choice(env._generate_preferred(history))
+        next_ob, rw, done, info = env.step(action)
+        history.append(Transition(ob, action, next_ob, rw, done))
+        ob = next_ob
         env.render()
         r += rw * discount
         discount *= env._discount

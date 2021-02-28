@@ -195,8 +195,8 @@ class BattleShipEnv(Env):
     @staticmethod
     def collision(ship, grid, state):
 
-        pos = ship.pos  # .copy()
-        for i in range(ship.length):
+        pos = ship.pos
+        for i in range(ship.length + 1):
             if not grid.is_inside(pos + Compass.get_coord(ship.direction)):
                 return True
             # cell = grid.get_value(pos)
